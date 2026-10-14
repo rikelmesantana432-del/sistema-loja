@@ -1,0 +1,24 @@
+{
+  "name": "Cesinha Acessórios — StrategyOS",
+  "short_name": "Cesinha App",
+  "description": "Sistema de Gestão Financeira, Vendas e Estoque da Cesinha Acessórios",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0f1420",
+  "theme_color": "#0f1420",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3659/3659898.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3659/3659898.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

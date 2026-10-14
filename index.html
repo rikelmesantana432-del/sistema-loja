@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="description" content="StrategyOS 3.0 — Sistema de gestão inteligente para Cesinha Acessórios">
+    <meta name="theme-color" content="#0f1420">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Cesinha App">
+    <link rel="manifest" href="manifest.json?v=8.0.0">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3659/3659898.png">
+    <title>StrategyOS 3.0 — Cesinha Acessórios</title>
+     <link rel="stylesheet" href="css/style.css?v=8.0.0">
+    <link rel="stylesheet" href="css/premium.css?v=8.0.0">
+    <link rel="stylesheet" href="css/splash.css?v=8.0.0">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,500;0,700;1,300;1,500&family=Inter:wght@200;300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <!-- SPLASH SCREEN -->
+    <div id="splash">
+      <div class="grade"></div>
+      <div class="canto canto-tl"></div>
+      <div class="canto canto-tr"></div>
+      <div class="canto canto-bl"></div>
+      <div class="canto canto-br"></div>
+      <div class="splash-particulas" id="splash-particulas"></div>
+      <div class="splash-corpo">
+        <div class="linha-topo"></div>
+        <div class="splash-icone">🏪</div>
+        <div class="splash-nome">Cesinha Acessórios</div>
+        <div class="splash-cidade">Amargosa &nbsp;·&nbsp; Bahia</div>
+        <div class="splash-divisor"></div>
+        <div class="splash-msg">
+          Bem-vindo de volta.<br>
+          Vamos <em>começar a trabalhar?</em><span class="splash-cursor"></span>
+        </div>
+        <div class="splash-resposta">✦ &nbsp; tudo pronto &nbsp; ✦</div>
+        <div class="splash-bar-wrap">
+          <div class="splash-bar-fill"></div>
+        </div>
+        <div class="linha-base"></div>
+      </div>
+    </div>
+
+    <!-- HEADER -->
+    <header class="app-header">
+        <div class="header-left">
+            <button class="menu-toggle" onclick="UI.toggleSidebar()">☰</button>
+            <h1 class="app-title">🏪 Cesinha Acessórios</h1>
+            <span id="cloud-status-badge" style="font-size:11px;font-weight:800;background:rgba(0,255,163,0.12);color:#00FFA3;border:1px solid rgba(0,255,163,0.4);padding:3px 8px;border-radius:12px;display:inline-flex;align-items:center;gap:4px;margin-left:8px;" title="Modo Localhost Seguro — 100% Offline com Backup Automático Telegram">
+                💾 Localhost Ativo (Seguro)
+            </span>
+        </div>
+        <div class="header-right">
+            <div class="mode-toggles">
+                <button id="btn-treino" class="mode-btn" onclick="UI.alternarTreino()" title="Modo Treino">🎓</button>
+                <button id="btn-tema" class="mode-btn" onclick="UI.alternarTema()" title="Alternar tema">🌙</button>
+                <button id="btn-modo" class="mode-btn" onclick="UI.alternarModo()" title="Alternar modo">📱</button>
+            </div>
+            <button class="notif-bell" onclick="UI.abrirAlertas()" title="Alertas">
+                🔔 <span id="notif-count" class="notif-badge" style="display:none">0</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- SIDEBAR -->
+    <nav class="sidebar" id="sidebar">
+        <div class="nav-section">
+            <!-- MODO VENDEDOR — BOTÃO ENORME NO TOPO -->
+            <button class="nav-btn nav-btn-vendedor" data-page="vendedor" onclick="UI.navigate('vendedor')"
+                style="background:#FFD700;border:3px solid #DAA520;box-shadow:0 2px 12px rgba(255,215,0,0.4)">
+                <span class="nav-icon" style="font-size:22px">🏪</span><span class="nav-text"
+                    style="color:#000;font-weight:800;font-size:18px">MODO VENDEDOR</span>
+            </button>
+            <div class="nav-divider"></div>
+            <button class="nav-btn active" data-page="inicio" onclick="UI.navigate('inicio')">
+                <span class="nav-icon">🏠</span><span class="nav-text">Início</span>
+            </button>
+            <button class="nav-btn" data-page="caixa" onclick="UI.navigate('caixa')">
+                <span class="nav-icon">💰</span><span class="nav-text">Caixa</span>
+            </button>
+            <button class="nav-btn" data-page="financeiro" onclick="UI.navigate('financeiro')" style="background:rgba(16,185,129,0.12);border-left:4px solid #10b981;">
+                <span class="nav-icon" style="font-size:20px">📊</span><span class="nav-text" style="color:#10b981;font-weight:700">DRE & Financeiro</span>
+            </button>
+            <button class="nav-btn" data-page="cobrancas" onclick="UI.navigate('cobrancas')">
+                <span class="nav-icon">💳</span><span class="nav-text">Cobranças</span>
+            </button>
+            <button class="nav-btn" data-page="assistencia" onclick="UI.navigate('assistencia')">
+                <span class="nav-icon">🔧</span><span class="nav-text">Consertos</span>
+            </button>
+            <button class="nav-btn" data-page="clientes" onclick="UI.navigate('clientes')">
+                <span class="nav-icon">👥</span><span class="nav-text">Clientes</span>
+            </button>
+            <button class="nav-btn" data-page="simulador" onclick="UI.navigate('simulador')">
+                <span class="nav-icon">📊</span><span class="nav-text">Simulador</span>
+            </button>
+            <button class="nav-btn" onclick="UI.renderPeliculAIQ()" id="nav-peliculaiq">
+                <span class="nav-icon">📱</span> Películas 3D IQ
+            </button>
+            <button class="nav-btn" data-page="campanhas" onclick="UI.navigate('campanhas')">
+                <span class="nav-icon">📢</span><span class="nav-text">Campanhas</span>
+            </button>
+            <button class="nav-btn" data-page="registrar" onclick="UI.navigate('registrar')">
+                <span class="nav-icon">📝</span><span class="nav-text">Registrar</span>
+            </button>
+            <button class="nav-btn" data-page="estoque" onclick="UI.navigate('estoque')">
+                <span class="nav-icon">📦</span><span class="nav-text">Estoque</span>
+            </button>
+            <button class="nav-btn" data-page="fiado" onclick="UI.navigate('fiado')">
+                <span class="nav-icon">📋</span><span class="nav-text">Vendas Fiado</span>
+            </button>
+            <button class="nav-btn" data-page="historico" onclick="UI.navigate('historico')">
+                <span class="nav-icon">📊</span><span class="nav-text">Histórico</span>
+            </button>
+            <a href="recibos.html" class="nav-btn" style="text-decoration:none;background:rgba(0,255,163,0.08);border-left:3px solid #00FFA3;">
+                <span class="nav-icon">✍️</span><span class="nav-text" style="color:#00FFA3;font-weight:700;">Assinatura & Recibos</span>
+            </a>
+            <button class="nav-btn" data-page="sugestoes" onclick="UI.navigate('sugestoes')">
+                <span class="nav-icon">🤖</span><span class="nav-text">IA Sugestões</span>
+            </button>
+            <button class="nav-btn" data-page="fidelidade" onclick="UI.navigate('fidelidade')">
+                <span class="nav-icon">🎁</span><span class="nav-text">Fidelidade</span>
+            </button>
+        </div>
+        <div class="sidebar-footer">
+            <button class="nav-btn" onclick="UI.modalConfigurarTelegram()" style="background:rgba(56,189,248,0.15);border-left:4px solid #38bdf8;">
+                <span class="nav-icon" style="font-size:20px">✈️</span><span class="nav-text" style="color:#38bdf8;font-weight:700">Bot Telegram</span>
+            </button>
+            <button id="btn-instalar-app" class="nav-btn" onclick="UI.instalarAppPWA()" style="background:rgba(0,217,126,0.15);border-left:4px solid #00d97e;">
+                <span class="nav-icon" style="font-size:20px">📱</span><span class="nav-text" style="color:#00d97e;font-weight:700">Instalar App Celular</span>
+            </button>
+            <button class="nav-btn" onclick="UI.exportarBackupGoogleDrive()" style="background:rgba(59,130,246,0.15);border-left:4px solid #3b82f6;">
+                <span class="nav-icon" style="font-size:20px">📁</span><span class="nav-text" style="color:#3b82f6;font-weight:700">Backup Google Drive</span>
+            </button>
+            <button class="nav-btn" onclick="UI.modalConfigurarEmail()" style="background:rgba(168,85,247,0.15);border-left:4px solid #a855f7;">
+                <span class="nav-icon" style="font-size:20px">📧</span><span class="nav-text" style="color:#a855f7;font-weight:700">Relatório E-mail</span>
+            </button>
+            <button class="nav-btn nav-btn-accent" onclick="UI.navigate('trocas')">
+                <span class="nav-icon">🔄</span><span class="nav-text">Avaliar Troca</span>
+            </button>
+            <button class="nav-btn" data-page="configuracoes" onclick="UI.navigate('configuracoes')">
+                <span class="nav-icon">⚙️</span><span class="nav-text">Configurações</span>
+            </button>
+            <button class="nav-btn" onclick="UI._modoVitrine()">
+                <span class="nav-icon">🖥️</span><span class="nav-text">Modo Vitrine</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- CONTEÚDO PRINCIPAL -->
+    <main class="main-content" id="main-content">
+        <div style="text-align:center;padding:60px 20px;color:var(--text-muted)">
+            <div style="font-size:48px;margin-bottom:16px">⏳</div>
+            <p>Carregando StrategyOS 3.0...</p>
+        </div>
+    </main>
+
+    <!-- MODAL -->
+    <div class="modal-overlay" id="modal-overlay" onclick="UI.closeModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 id="modal-title"></h3>
+                <button class="modal-close" onclick="UI.closeModal()">✕</button>
+            </div>
+            <div class="modal-body" id="modal-body"></div>
+        </div>
+    </div>
+
+    <!-- CANVAS BACKGROUND (Premium Dourado) -->
+    <canvas id="particles-canvas"></canvas>
+
+    <!-- TOAST -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- INDICADOR MODO TREINO -->
+    <div id="treino-indicator" class="treino-indicator" style="display:none">🎓 MODO TREINO ATIVO</div>
+
+    <!-- SCRIPTS (100% Localhost Seguro) -->
+    <!-- Supabase e backup automático desativados para evitar re-injeção de itens deletados -->
+    <script src="js/data.js?v=10.6.0"></script>
+    <script src="js/calculators.js?v=10.6.0"></script>
+    <script src="js/ui.js?v=10.6.0"></script>
+    <script src="js/ui-sections.js?v=10.6.0"></script>
+    <script src="js/ui-modals.js?v=10.6.0"></script>
+    <script src="js/ui-trocas.js?v=10.6.0"></script>
+    <script src="js/ui-trocas-form.js?v=10.6.0"></script>
+    <script src="js/ui-assistencia.js?v=10.6.0"></script>
+    <script src="js/ui-vendedor.js?v=10.6.0"></script>
+    <script src="js/ui-vendedor-fluxos.js?v=10.6.0"></script>
+    <script src="js/ui-venda-avulsa.js?v=10.6.0"></script>
+    <script src="js/ui-simulador.js?v=10.6.0"></script>
+    <script src="js/ui-fiado.js?v=10.6.0"></script>
+    <script src="js/ui-caixa.js?v=10.6.0"></script>
+    <script src="js/ui-ia-sugestoes.js?v=10.6.0"></script>
+    <script src="js/ui-fidelidade.js?v=10.6.0"></script>
+    <script src="js/ui-estoque.js?v=10.6.0"></script>
+    <script src="js/ui-estoque-render.js?v=10.6.0"></script>
+    <script src="js/peliculaiq.js?v=10.6.0"></script>
+    <script src="js/ui-peliculaiq.js?v=10.6.0"></script>
+    <script src="js/ui-melhorias.js?v=10.6.0"></script>
+    <script src="js/ui-melhorias-2.js?v=10.6.0"></script>
+    <script src="js/integrations.js?v=10.6.0"></script>
+    <script src="js/app.js?v=10.6.0"></script>
+    <script src="https://loja-cameras-oficial.netlify.app/camera-listener.js" onload="console.log('📷 StrategyOS: Camera Listener oficial ativo e conectado!')" onerror="console.warn('⚠️ StrategyOS: Não foi possível carregar o Camera Listener externo')"></script>
+
+    <!-- PARTICLES LOGIC -->
+    <script>
+        const canvas = document.getElementById('particles-canvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 4 + 1;
+                this.speedX = Math.random() * 0.5 - 0.25;
+                this.speedY = Math.random() * -0.5 - 0.1;
+                this.opacity = Math.random() * 0.5 + 0.1;
+            }
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                if (this.y < 0) {
+                    this.y = canvas.height;
+                    this.x = Math.random() * canvas.width;
+                }
+            }
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255, 215, 0, ${this.opacity})`;
+                ctx.fill();
+            }
+        }
+
+        function initParticles() {
+            particles = [];
+            for (let i = 0; i < 50; i++) {
+                particles.push(new Particle());
+            }
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let i = 0; i < particles.length; i++) {
+                particles[i].update();
+                particles[i].draw();
+            }
+            requestAnimationFrame(animateParticles);
+        }
+
+        initParticles();
+        animateParticles();
+    </script>
+
+    <!-- SPLASH PARTICLES -->
+    <script>
+    (function gerarSplashParticulas() {
+        const c = document.getElementById('splash-particulas');
+        if (!c) return;
+        for (let i = 0; i < 28; i++) {
+            const p = document.createElement('div');
+            p.className = 'splash-p';
+            const s = Math.random() * 2.5 + 0.8;
+            p.style.cssText = `
+                width:${s}px; height:${s}px;
+                left:${Math.random()*100}%;
+                bottom:-8px;
+                animation-duration:${Math.random()*9+7}s;
+                animation-delay:${Math.random()*5}s;
+                opacity:${Math.random()*0.5+0.1};
+            `;
+            c.appendChild(p);
+        }
+    })();
+    // Remover splash do DOM após animação
+    setTimeout(() => {
+        const s = document.getElementById('splash');
+        if (s) s.remove();
+    }, 6000);
+    </script>
+    
+
+</body>
+
+</html>

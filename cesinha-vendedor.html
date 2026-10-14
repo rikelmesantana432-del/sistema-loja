@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cesinha Acessórios — Modo Vendedor</title>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75'>🛒</text></svg>">
+    <link rel="stylesheet" href="css/style.css?v=8.0.0">
+    <link rel="stylesheet" href="css/premium.css?v=8.0.0">
+    <style>
+        /* Forçar modo vendedor ao carregar */
+        body {
+            margin: 0;
+            padding: 0;
+            background: var(--bg-primary, #0a0a0f);
+        }
+
+        #sidebar {
+            display: none !important;
+        }
+
+        #main-content {
+            margin-left: 0 !important;
+            width: 100% !important;
+        }
+    </style>
+</head>
+
+<body class="vendedor-fullscreen">
+    <div id="modal-overlay" style="display:none"></div>
+    <div id="main-content">
+        <div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#FFD700;font-size:24px;">
+            ⏳ Carregando Modo Vendedor...
+        </div>
+    </div>
+
+    <!-- Scripts do StrategyOS (100% Localhost Seguro) -->
+    <script src="js/data.js?v=10.6.0"></script>
+    <script src="js/calculators.js?v=10.6.0"></script>
+    <script src="js/ui.js?v=10.6.0"></script>
+    <script src="js/ui-sections.js?v=10.6.0"></script>
+    <script src="js/ui-modals.js?v=10.6.0"></script>
+    <script src="js/ui-trocas.js?v=10.6.0"></script>
+    <script src="js/ui-trocas-form.js?v=10.6.0"></script>
+    <script src="js/ui-assistencia.js?v=10.6.0"></script>
+    <script src="js/ui-vendedor.js?v=10.6.0"></script>
+    <script src="js/ui-vendedor-fluxos.js?v=10.6.0"></script>
+    <script src="js/ui-venda-avulsa.js?v=10.6.0"></script>
+    <script src="js/ui-simulador.js?v=10.6.0"></script>
+    <script src="js/ui-fiado.js?v=10.6.0"></script>
+    <script src="js/ui-caixa.js?v=10.6.0"></script>
+    <script src="js/ui-ia-sugestoes.js?v=10.6.0"></script>
+    <script src="js/ui-fidelidade.js?v=10.6.0"></script>
+    <script src="js/ui-estoque.js?v=10.6.0"></script>
+    <script src="js/peliculaiq.js?v=10.6.0"></script>
+    <script src="js/ui-peliculaiq.js?v=10.6.0"></script>
+    <script src="js/ui-melhorias.js?v=10.6.0"></script>
+    <script src="js/ui-melhorias-2.js?v=10.6.0"></script>
+    <script src="js/integrations.js?v=10.6.0"></script>
+    <script src="js/app.js?v=10.6.0"></script>
+
+    <script>
+        // Inicializar e ir direto para o Modo Vendedor
+        document.addEventListener('DOMContentLoaded', function () {
+            // Aguardar dataManager carregar
+            const waitForData = setInterval(function () {
+                if (typeof dataManager !== 'undefined' && typeof UI !== 'undefined' && typeof UI.renderVendedor === 'function') {
+                    clearInterval(waitForData);
+                    try {
+                        dataManager.loadData();
+                    } catch (e) { }
+                    setTimeout(function () {
+                        UI.renderVendedor();
+                    }, 300);
+                }
+            }, 100);
+        });
+    </script>
+</body>
+
+</html>

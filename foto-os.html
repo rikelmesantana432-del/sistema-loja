@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>📸 StrategyOS — Câmera OS</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0f;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .header {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, rgba(0, 200, 255, 0.15), rgba(0, 100, 255, 0.1));
+            border-bottom: 1px solid rgba(0, 200, 255, 0.2);
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 18px;
+            font-weight: 800;
+            color: #00c8ff;
+        }
+        .header .session-info {
+            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+            margin-top: 4px;
+        }
+        .status-bar {
+            width: 100%;
+            padding: 10px 16px;
+            text-align: center;
+            font-size: 13px;
+            font-weight: 700;
+        }
+        .status-connected { background: rgba(0, 200, 100, 0.15); color: #00d964; border-bottom: 1px solid rgba(0, 200, 100, 0.2); }
+        .status-error { background: rgba(255, 50, 50, 0.15); color: #ff5555; border-bottom: 1px solid rgba(255, 50, 50, 0.2); }
+        
+        .camera-area {
+            width: 100%;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px 16px;
+            gap: 16px;
+        }
+        .btn-camera {
+            width: 100%;
+            max-width: 400px;
+            padding: 20px;
+            border: none;
+            border-radius: 16px;
+            font-size: 18px;
+            font-weight: 800;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+        .btn-camera:active { transform: scale(0.96); }
+        .btn-foto {
+            background: linear-gradient(135deg, #00c8ff, #0060ff);
+            color: #fff;
+            box-shadow: 0 4px 20px rgba(0, 200, 255, 0.3);
+        }
+        .btn-galeria {
+            background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+            color: #fff;
+            box-shadow: 0 4px 20px rgba(139, 92, 246, 0.3);
+        }
+        
+        .fotos-grid {
+            width: 100%;
+            max-width: 400px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+        .foto-thumb {
+            position: relative;
+            aspect-ratio: 1;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid rgba(0, 200, 255, 0.3);
+        }
+        .foto-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .foto-thumb .badge-ok {
+            position: absolute;
+            bottom: 4px;
+            right: 4px;
+            background: rgba(0, 200, 100, 0.9);
+            color: #fff;
+            font-size: 10px;
+            font-weight: 800;
+            padding: 2px 6px;
+            border-radius: 6px;
+        }
+        .foto-counter {
+            text-align: center;
+            font-size: 14px;
+            color: rgba(255,255,255,0.6);
+            font-weight: 600;
+        }
+        .toast-msg {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 14px;
+            z-index: 9999;
+            animation: fadeInOut 2.5s ease;
+            pointer-events: none;
+        }
+        .toast-success { background: rgba(0,200,100,0.95); color: #fff; }
+        .toast-error { background: rgba(255,50,50,0.95); color: #fff; }
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+            15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            80% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+        
+        input[type="file"] { display: none; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📸 StrategyOS — Câmera OS</h1>
+        <div class="session-info" id="session-info">Conectando...</div>
+    </div>
+    
+    <div id="status-bar" class="status-bar status-connected" style="display:none;"></div>
+    
+    <div class="camera-area">
+        <button class="btn-camera btn-foto" onclick="tirarFoto()">
+            📷 TIRAR FOTO
+        </button>
+        
+        <button class="btn-camera btn-galeria" onclick="enviarGaleria()">
+            📁 ENVIAR DA GALERIA
+        </button>
+        
+        <div class="foto-counter" id="foto-counter"></div>
+        
+        <div class="fotos-grid" id="fotos-grid"></div>
+    </div>
+    
+    <input type="file" id="input-camera" accept="image/*" multiple>
+    <input type="file" id="input-galeria" accept="image/*" multiple>
+    
+    <script>
+        // Extrair session da URL
+        var params = new URLSearchParams(window.location.search);
+        var SESSION = params.get('session') || 'default';
+        var API_BASE = window.location.origin;
+        var fotosEnviadas = [];
+        var MAX_FOTOS = 5;
+        
+        document.getElementById('session-info').textContent = 'Sessão: ' + SESSION;
+        
+        // Verificar conexão com o servidor
+        fetch(API_BASE + '/api/ip')
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                var bar = document.getElementById('status-bar');
+                bar.style.display = 'block';
+                bar.className = 'status-bar status-connected';
+                bar.textContent = '✅ Conectado ao StrategyOS no PC';
+            })
+            .catch(function() {
+                var bar = document.getElementById('status-bar');
+                bar.style.display = 'block';
+                bar.className = 'status-bar status-error';
+                bar.textContent = '❌ Erro de conexão com o PC';
+            });
+        
+        function tirarFoto() {
+            if (fotosEnviadas.length >= MAX_FOTOS) {
+                showToast('Limite de ' + MAX_FOTOS + ' fotos atingido!', 'error');
+                return;
+            }
+            document.getElementById('input-camera').click();
+        }
+        
+        function enviarGaleria() {
+            if (fotosEnviadas.length >= MAX_FOTOS) {
+                showToast('Limite de ' + MAX_FOTOS + ' fotos atingido!', 'error');
+                return;
+            }
+            document.getElementById('input-galeria').click();
+        }
+        
+        document.getElementById('input-camera').addEventListener('change', function(e) {
+            processarArquivos(e.target.files);
+            e.target.value = '';
+        });
+        
+        document.getElementById('input-galeria').addEventListener('change', function(e) {
+            processarArquivos(e.target.files);
+            e.target.value = '';
+        });
+        
+        function processarArquivos(files) {
+            Array.from(files).forEach(function(file) {
+                if (fotosEnviadas.length >= MAX_FOTOS) return;
+                comprimirImagem(file, 800, 600, 0.6).then(function(base64) {
+                    enviarParaPC(base64);
+                }).catch(function(err) {
+                    showToast('Erro ao processar foto', 'error');
+                    console.error(err);
+                });
+            });
+        }
+        
+        function comprimirImagem(file, maxW, maxH, quality) {
+            return new Promise(function(resolve, reject) {
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    var img = new Image();
+                    img.onload = function() {
+                        var canvas = document.createElement('canvas');
+                        var w = img.width, h = img.height;
+                        if (w > maxW) { h = h * (maxW / w); w = maxW; }
+                        if (h > maxH) { w = w * (maxH / h); h = maxH; }
+                        canvas.width = Math.round(w);
+                        canvas.height = Math.round(h);
+                        var ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        resolve(canvas.toDataURL('image/jpeg', quality));
+                    };
+                    img.onerror = reject;
+                    img.src = e.target.result;
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+        
+        function enviarParaPC(base64) {
+            var desc = 'Foto ' + (fotosEnviadas.length + 1) + ' - Estado do Aparelho';
+            
+            fetch(API_BASE + '/api/foto', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    session: SESSION,
+                    base64: base64,
+                    descricao: desc
+                })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(result) {
+                if (result.sucesso) {
+                    fotosEnviadas.push({ id: result.id, base64: base64, descricao: desc });
+                    renderFotos();
+                    showToast('📸 Foto enviada para o PC!', 'success');
+                } else {
+                    showToast('Erro: ' + (result.erro || 'Falha'), 'error');
+                }
+            })
+            .catch(function(err) {
+                showToast('❌ Falha na conexão com o PC', 'error');
+                console.error(err);
+            });
+        }
+        
+        function renderFotos() {
+            var grid = document.getElementById('fotos-grid');
+            var counter = document.getElementById('foto-counter');
+            counter.textContent = fotosEnviadas.length + ' de ' + MAX_FOTOS + ' fotos enviadas';
+            
+            grid.innerHTML = fotosEnviadas.map(function(f) {
+                return '<div class="foto-thumb">' +
+                    '<img src="' + f.base64 + '">' +
+                    '<span class="badge-ok">✓ Enviada</span>' +
+                    '</div>';
+            }).join('');
+        }
+        
+        function showToast(msg, type) {
+            var div = document.createElement('div');
+            div.className = 'toast-msg toast-' + type;
+            div.textContent = msg;
+            document.body.appendChild(div);
+            setTimeout(function() { div.remove(); }, 2600);
+        }
+    </script>
+</body>
+</html>

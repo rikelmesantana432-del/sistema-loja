@@ -1,0 +1,850 @@
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TROQ. — Checkout Trade-In Premium</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/supabase-config.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+tailwind.config = { theme: { extend: {
+  fontFamily: { disp:['"Space Grotesk"','sans-serif'], mono:['"JetBrains Mono"','monospace'], body:['Inter','sans-serif'] },
+  colors: { neon:'#00FFA3', ink:'#060809' }
+}}}
+</script>
+<style>
+  :root{ --neon:#00FFA3; --neon2:#B6FF5C; --teal:#00E0C0; }
+  *{ -webkit-tap-highlight-color:transparent; }
+  html{ scroll-behavior:smooth; }
+  body{ background:#060809; color:#E7EFEA; font-family:Inter,sans-serif; overflow-x:hidden; }
+  ::selection{ background:rgba(0,255,163,.25); color:#fff; }
+  ::-webkit-scrollbar{ width:9px; height:9px; }
+  ::-webkit-scrollbar-track{ background:#080B0A; }
+  ::-webkit-scrollbar-thumb{ background:#1B2420; border-radius:99px; border:2px solid #080B0A; }
+  ::-webkit-scrollbar-thumb:hover{ background:#00FFA3; }
+
+  /* ---------- background layers ---------- */
+  .bg-grid{
+    background-image:linear-gradient(rgba(255,255,255,.028) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.028) 1px,transparent 1px);
+    background-size:54px 54px;
+    -webkit-mask-image:radial-gradient(ellipse 100% 80% at 50% -10%,#000 25%,transparent 78%);
+            mask-image:radial-gradient(ellipse 100% 80% at 50% -10%,#000 25%,transparent 78%);
+  }
+  .orb{ position:absolute; border-radius:50%; filter:blur(100px); pointer-events:none; }
+  .noise{
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+    opacity:.045; mix-blend-mode:overlay;
+  }
+
+  /* ---------- shared widgets ---------- */
+  .glass{
+    background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.014));
+    border:1px solid rgba(255,255,255,.085);
+    backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+  }
+  .micro{ font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#67766E; }
+  .tick{ position:absolute; width:10px; height:10px; border-color:rgba(0,255,163,.45); border-style:solid; }
+
+  .dot-live{ width:7px; height:7px; border-radius:50%; background:var(--neon); box-shadow:0 0 10px var(--neon); animation:blink 1.8s infinite; }
+  @keyframes blink{ 0%,100%{opacity:1} 50%{opacity:.25} }
+
+  /* ---------- steps ---------- */
+  .step{ border-radius:20px; padding:22px 22px 24px; position:relative; transition:border-color .35s, transform .35s; }
+  .step:hover{ border-color:rgba(0,255,163,.22); }
+  .step-num{
+    font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700; color:var(--neon);
+    border:1px solid rgba(0,255,163,.3); border-radius:8px; padding:5px 8px;
+    background:rgba(0,255,163,.06); box-shadow:inset 0 0 12px rgba(0,255,163,.07);
+  }
+  .step-check{
+    width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,.16);
+    display:grid; place-items:center; flex-shrink:0; transition:all .35s;
+  }
+  .step-check svg{ width:12px; height:10px; }
+  .step-check svg path{ stroke:transparent; transition:stroke .3s; }
+  .step.done .step-check{ background:var(--neon); border-color:var(--neon); box-shadow:0 0 18px rgba(0,255,163,.55); }
+  .step.done .step-check svg path{ stroke:#04120B; }
+  .step-status{ font-size:10px; letter-spacing:.14em; color:#8FA79B; }
+
+  /* device cards */
+  .dev-in{
+    display:flex; align-items:center; gap:10px; padding:12px 14px; border-radius:14px; cursor:pointer;
+    border:1px solid rgba(255,255,255,.09); background:rgba(255,255,255,.025); transition:all .28s;
+  }
+  .dev-in:hover{ border-color:rgba(255,255,255,.22); transform:translateY(-1px); }
+  .dev-dot{ width:9px; height:9px; border-radius:50%; border:1.5px solid rgba(255,255,255,.3); flex-shrink:0; transition:all .28s; }
+  .dev-base{ margin-left:auto; font-size:11px; color:#67766E; transition:color .28s; }
+  .dev input:checked + .dev-in{
+    border-color:rgba(0,255,163,.65); background:rgba(0,255,163,.07);
+    box-shadow:0 0 24px rgba(0,255,163,.14), inset 0 0 18px rgba(0,255,163,.05);
+  }
+  .dev input:checked + .dev-in .dev-dot{ background:var(--neon); border-color:var(--neon); box-shadow:0 0 10px var(--neon); }
+  .dev input:checked + .dev-in .dev-base{ color:var(--neon); }
+  .dev input:focus-visible + .dev-in{ outline:2px solid rgba(0,255,163,.5); outline-offset:2px; }
+
+  /* range slider */
+  input[type=range]{ -webkit-appearance:none; appearance:none; width:100%; height:26px; background:transparent; cursor:pointer; }
+  input[type=range]::-webkit-slider-runnable-track{
+    height:6px; border-radius:99px;
+    background:linear-gradient(90deg, var(--neon) var(--p,84%), rgba(255,255,255,.09) var(--p,84%));
+    box-shadow:0 0 14px rgba(0,255,163,.18);
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:22px; height:22px; margin-top:-8px; border-radius:50%;
+    background:#0B100E; border:2px solid var(--neon);
+    box-shadow:0 0 16px rgba(0,255,163,.7), inset 0 0 7px rgba(0,255,163,.5); transition:transform .2s;
+  }
+  input[type=range]::-webkit-slider-thumb:hover{ transform:scale(1.15); }
+  input[type=range]::-moz-range-track{ height:6px; border-radius:99px; background:rgba(255,255,255,.09); }
+  input[type=range]::-moz-range-progress{ height:6px; border-radius:99px; background:var(--neon); }
+  input[type=range]::-moz-range-thumb{
+    width:18px; height:18px; border-radius:50%; background:#0B100E; border:2px solid var(--neon);
+    box-shadow:0 0 16px rgba(0,255,163,.7);
+  }
+  .tier{ font-family:'JetBrains Mono'; font-size:10px; letter-spacing:.16em; padding:5px 10px; border-radius:99px; border:1px solid; transition:all .3s; }
+
+  /* pills (screen) */
+  .pill-in{
+    display:flex; flex-direction:column; gap:3px; align-items:flex-start; padding:12px 14px; border-radius:14px; cursor:pointer;
+    border:1px solid rgba(255,255,255,.09); background:rgba(255,255,255,.025); transition:all .28s; font-size:13px; font-weight:500;
+  }
+  .pill-in em{ font-style:normal; font-family:'JetBrains Mono'; font-size:10px; color:#67766E; transition:color .28s; }
+  .pill-in:hover{ border-color:rgba(255,255,255,.22); }
+  .pill input:checked + .pill-in{
+    border-color:rgba(0,255,163,.65); background:rgba(0,255,163,.07); color:#fff;
+    box-shadow:0 0 22px rgba(0,255,163,.13);
+  }
+  .pill input:checked + .pill-in em{ color:var(--neon); }
+  .pill input:focus-visible + .pill-in{ outline:2px solid rgba(0,255,163,.5); outline-offset:2px; }
+
+  /* defect rows */
+  .defrow{
+    display:flex; align-items:center; gap:12px; padding:11px 12px; border-radius:12px; cursor:pointer;
+    border:1px solid transparent; transition:all .25s; font-size:13.5px;
+  }
+  .defrow:hover{ background:rgba(255,255,255,.035); border-color:rgba(255,255,255,.07); }
+  .cbox{
+    width:20px; height:20px; border-radius:6px; border:1px solid rgba(255,255,255,.22);
+    display:grid; place-items:center; flex-shrink:0; transition:all .25s; background:rgba(255,255,255,.02);
+  }
+  .cbox svg{ width:11px; height:9px; opacity:0; transform:scale(.3); transition:all .25s cubic-bezier(.6,1.6,.4,1); }
+  .defrow input:checked ~ .cbox{ background:rgba(255,90,110,.12); border-color:#FF5A6E; box-shadow:0 0 14px rgba(255,90,110,.3); }
+  .defrow input:checked ~ .cbox svg{ opacity:1; transform:scale(1); }
+  .defrow input:checked ~ .def-lbl{ color:#FFB9C1; }
+  .defrow input:focus-visible ~ .cbox{ outline:2px solid rgba(0,255,163,.5); outline-offset:2px; }
+
+  /* accessory chips */
+  .achip-in{
+    display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:99px; cursor:pointer;
+    border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.025); font-size:12.5px; font-weight:500; transition:all .28s;
+  }
+  .achip-in em{ font-style:normal; font-family:'JetBrains Mono'; font-size:10px; color:#67766E; }
+  .achip-in .plus{ width:15px; height:15px; border-radius:50%; border:1px solid rgba(255,255,255,.25); display:grid; place-items:center; font-size:10px; color:#8FA79B; transition:all .28s; }
+  .achip-in:hover{ border-color:rgba(255,255,255,.24); }
+  .achip input:checked + .achip-in{ border-color:rgba(0,255,163,.6); background:rgba(0,255,163,.08); box-shadow:0 0 18px rgba(0,255,163,.12); }
+  .achip input:checked + .achip-in em{ color:var(--neon); }
+  .achip input:checked + .achip-in .plus{ background:var(--neon); border-color:var(--neon); color:#04120B; }
+  .achip input:focus-visible + .achip-in{ outline:2px solid rgba(0,255,163,.5); outline-offset:2px; }
+
+  /* ---------- summary card ---------- */
+  .summary-wrap{ position:relative; }
+  .summary-wrap::before{
+    content:''; position:absolute; inset:-2px; border-radius:26px; z-index:0;
+    background:linear-gradient(160deg, rgba(0,255,163,.55), rgba(0,255,163,.05) 30%, rgba(0,224,192,.08) 65%, rgba(182,255,92,.4));
+    filter:blur(14px); opacity:.5; animation:glowPulse 4s ease-in-out infinite;
+  }
+  @keyframes glowPulse{ 0%,100%{opacity:.35} 50%{opacity:.65} }
+  .summary{
+    position:relative; z-index:1; border-radius:24px; overflow:hidden;
+    background:
+      linear-gradient(180deg, rgba(13,18,16,.92), rgba(8,11,10,.96)) padding-box,
+      linear-gradient(160deg, rgba(0,255,163,.6), rgba(255,255,255,.08) 32%, rgba(0,224,192,.35)) border-box;
+    border:1px solid transparent;
+    backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
+  }
+  .summary::after{
+    content:''; position:absolute; inset:0; pointer-events:none;
+    background:radial-gradient(420px circle at var(--mx,70%) var(--my,10%), rgba(0,255,163,.09), transparent 60%);
+    transition:opacity .3s;
+  }
+  .nchip{
+    flex-shrink:0; scroll-snap-align:start; padding:9px 14px; border-radius:12px; font-size:12px; font-weight:500;
+    border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.03); transition:all .28s; display:flex; flex-direction:column; align-items:flex-start; gap:2px;
+  }
+  .nchip em{ font-style:normal; font-family:'JetBrains Mono'; font-size:9.5px; color:#67766E; }
+  .nchip:hover{ border-color:rgba(255,255,255,.25); }
+  .nchip.on{ border-color:rgba(0,255,163,.65); background:rgba(0,255,163,.09); box-shadow:0 0 18px rgba(0,255,163,.15); }
+  .nchip.on em{ color:var(--neon); }
+
+  .row{ display:flex; justify-content:space-between; align-items:baseline; gap:12px; font-size:13px; padding:7px 0; }
+  .row b{ font-family:'JetBrains Mono'; font-weight:600; font-size:13px; white-space:nowrap; }
+  .row.dim{ color:#8FA79B; } .row.dim b{ color:#C6D4CC; font-weight:500; }
+  .row.pos{ color:#8FA79B; } .row.pos b{ color:var(--neon); }
+  .row.trade{ padding-top:12px; }
+  .row.trade span{ font-family:'JetBrains Mono'; font-size:10.5px; letter-spacing:.18em; color:#8FA79B; }
+  .row.trade b{ color:var(--neon); font-size:17px; text-shadow:0 0 20px rgba(0,255,163,.5); }
+
+  .total-value{
+    font-family:'Space Grotesk'; font-weight:700; line-height:.95; letter-spacing:-.035em;
+    font-size:clamp(3.1rem, 6.2vw, 5rem);
+    background:linear-gradient(100deg,#EDFF8F 0%, #6DFFB4 32%, #00FFA3 58%, #00E0C0 100%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    filter:drop-shadow(0 0 26px rgba(0,255,163,.38));
+  }
+  .total-label{
+    font-family:'JetBrains Mono'; font-weight:700; font-size:clamp(.8rem,1.4vw,1rem); letter-spacing:.34em;
+    background:linear-gradient(90deg,#B6FF5C,#00FFA3); -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+
+  .comp{ height:8px; border-radius:99px; background:rgba(255,255,255,.07); overflow:hidden; }
+  .comp > div{ height:100%; border-radius:99px; background:linear-gradient(90deg,#B6FF5C,#00FFA3,#00E0C0); box-shadow:0 0 16px rgba(0,255,163,.5); width:0%; }
+
+  .cta{
+    position:relative; width:100%; padding:18px; border-radius:16px; overflow:hidden;
+    background:linear-gradient(100deg,#C6FF63,#00FFA3 55%,#00E0C0); color:#03130B;
+    font-family:'Space Grotesk'; font-weight:700; font-size:15px; letter-spacing:.06em;
+    box-shadow:0 10px 44px rgba(0,255,163,.35); transition:transform .3s, box-shadow .3s;
+  }
+  .cta:hover{ transform:translateY(-2px); box-shadow:0 16px 64px rgba(0,255,163,.55); }
+  .cta:active{ transform:translateY(0) scale(.99); }
+  .cta::after{
+    content:''; position:absolute; top:0; left:-80%; width:50%; height:100%;
+    background:linear-gradient(100deg,transparent,rgba(255,255,255,.55),transparent); transform:skewX(-20deg);
+    animation:shine 3.4s ease-in-out infinite;
+  }
+  @keyframes shine{ 0%,60%{left:-80%} 100%{left:160%} }
+
+  /* modal */
+  #modal{ position:fixed; inset:0; z-index:60; display:none; align-items:center; justify-content:center; padding:20px; }
+  #modal .ovl{ position:absolute; inset:0; background:rgba(3,5,4,.78); backdrop-filter:blur(10px); }
+  .modal-card{
+    position:relative; width:100%; max-width:420px; border-radius:24px; padding:32px;
+    background:linear-gradient(180deg,#0D1210,#080B0A) padding-box,
+    linear-gradient(160deg, rgba(0,255,163,.6), rgba(255,255,255,.08) 40%, rgba(0,224,192,.3)) border-box;
+    border:1px solid transparent; box-shadow:0 30px 90px rgba(0,0,0,.7), 0 0 80px rgba(0,255,163,.12);
+  }
+  .qr-wrap{ background:#fff; border-radius:14px; padding:12px; box-shadow:0 0 40px rgba(0,255,163,.25); }
+  .qr-wrap svg{ display:block; width:100%; height:auto; }
+
+  .save-pill{
+    display:inline-flex; align-items:center; gap:7px; padding:6px 12px; border-radius:99px;
+    border:1px solid rgba(0,255,163,.35); background:rgba(0,255,163,.07);
+    font-family:'JetBrains Mono'; font-size:10px; letter-spacing:.14em; color:var(--neon);
+  }
+  .no-scrollbar::-webkit-scrollbar{ display:none; } .no-scrollbar{ scrollbar-width:none; }
+</style>
+</head>
+<body class="font-body antialiased">
+
+<!-- BACKGROUND -->
+<div class="fixed inset-0 pointer-events-none z-0">
+  <div class="absolute inset-0 bg-grid"></div>
+  <div class="orb" style="width:560px;height:560px;top:-220px;right:-120px;background:rgba(0,255,163,.13)" id="orb1"></div>
+  <div class="orb" style="width:480px;height:480px;bottom:-200px;left:-160px;background:rgba(0,224,192,.09)" id="orb2"></div>
+  <div class="orb" style="width:300px;height:300px;top:40%;left:45%;background:rgba(182,255,92,.05)"></div>
+  <div class="absolute inset-0 noise"></div>
+  <div class="absolute inset-0" style="background:radial-gradient(ellipse 120% 90% at 50% 50%, transparent 55%, rgba(0,0,0,.55))"></div>
+</div>
+
+<!-- HEADER -->
+<header class="relative z-10 max-w-[1440px] mx-auto px-5 md:px-8 py-5 flex items-center justify-between border-b border-white/5">
+  <div class="flex items-center gap-3">
+    <div class="w-9 h-9 rounded-xl grid place-items-center font-disp font-bold text-lg text-[#04120B]" style="background:linear-gradient(135deg,#B6FF5C,#00FFA3);box-shadow:0 0 24px rgba(0,255,163,.45)">T</div>
+    <div>
+      <div class="font-disp font-bold tracking-tight text-lg leading-none">TROQ<span class="text-neon">.</span></div>
+      <div class="micro mt-1">TRADE-IN OS · V2.4</div>
+    </div>
+  </div>
+  <div class="hidden md:flex items-center gap-6">
+    <span class="micro" id="sessId">SIM-000000</span>
+    <span class="micro flex items-center gap-2"><span class="dot-live"></span>SISTEMA ONLINE</span>
+    <span class="mono text-xs text-[#8FA79B]" id="clock">00:00:00</span>
+  </div>
+</header>
+
+<!-- MAIN -->
+<main class="relative z-10 max-w-[1440px] mx-auto px-5 md:px-8 py-8 md:py-12 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+
+  <!-- ============ LEFT : QUESTIONNAIRE ============ -->
+  <section class="lg:col-span-7 space-y-5">
+
+    <div class="flex flex-wrap items-end justify-between gap-4 px-1" id="leftHead">
+      <div>
+        <p class="micro mb-2 flex items-center gap-2"><span class="dot-live"></span>CHECKLIST DE AVALIAÇÃO</p>
+        <h1 class="font-disp font-bold text-3xl md:text-4xl tracking-tight">Avalie seu usado<span class="text-neon">_</span></h1>
+      </div>
+      <div class="w-full sm:w-64">
+        <div class="flex justify-between micro mb-2"><span>PROGRESSO</span><span id="progressTxt" class="text-neon">5/5</span></div>
+        <div class="h-[5px] rounded-full bg-white/8 overflow-hidden" style="background:rgba(255,255,255,.07)">
+          <div id="progressFill" class="h-full rounded-full" style="width:0%;background:linear-gradient(90deg,#B6FF5C,#00FFA3);box-shadow:0 0 12px rgba(0,255,163,.6)"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 01 · DEVICE -->
+    <div class="step glass done" data-step="1">
+      <span class="tick" style="top:-1px;left:-1px;border-width:1.5px 0 0 1.5px;border-radius:4px 0 0 0"></span>
+      <span class="tick" style="top:-1px;right:-1px;border-width:1.5px 1.5px 0 0;border-radius:0 4px 0 0"></span>
+      <div class="flex items-center gap-4 mb-5">
+        <span class="step-num">01</span>
+        <div class="flex-1 min-w-0">
+          <h3 class="font-disp font-semibold text-base">Seu aparelho atual</h3>
+          <p class="micro mt-1">SELECIONE O MODELO PARA TRADE-IN</p>
+        </div>
+        <span class="step-status mono hidden sm:block" id="st1">—</span>
+        <span class="step-check"><svg viewBox="0 0 12 10"><path d="M1 5.2 4.4 8.6 11 1.4" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5" id="devGrid"></div>
+    </div>
+
+    <!-- STEP 02 · BATTERY -->
+    <div class="step glass done" data-step="2">
+      <div class="flex items-center gap-4 mb-5">
+        <span class="step-num">02</span>
+        <div class="flex-1 min-w-0">
+          <h3 class="font-disp font-semibold text-base">Saúde da bateria</h3>
+          <p class="micro mt-1">AJUSTES → BATERIA → CAPACIDADE MÁXIMA</p>
+        </div>
+        <span class="step-status mono hidden sm:block" id="st2">—</span>
+        <span class="step-check"><svg viewBox="0 0 12 10"><path d="M1 5.2 4.4 8.6 11 1.4" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </div>
+      <div class="flex items-center gap-5 mb-4">
+        <svg width="44" height="21" viewBox="0 0 34 16" class="flex-shrink-0">
+          <rect x="1" y="1" width="29" height="14" rx="3.5" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="1.2"/>
+          <rect id="batFill" x="3.5" y="3.5" width="22" height="9" rx="1.8" fill="#00FFA3" style="transition:width .3s, fill .3s"/>
+          <rect x="31" y="5" width="2.6" height="6" rx="1.2" fill="rgba(255,255,255,.25)"/>
+        </svg>
+        <div class="font-disp font-bold text-4xl tracking-tight"><span id="batVal">88</span><span class="text-neon text-2xl">%</span></div>
+        <span class="tier" id="batTier">BOA</span>
+      </div>
+      <input type="range" id="batRange" min="50" max="100" value="88" step="1" aria-label="Saúde da bateria">
+      <div class="flex justify-between micro mt-1"><span>50% · CRÍTICA</span><span>100% · EXCELENTE</span></div>
+    </div>
+
+    <!-- STEP 03 · SCREEN -->
+    <div class="step glass done" data-step="3">
+      <div class="flex items-center gap-4 mb-5">
+        <span class="step-num">03</span>
+        <div class="flex-1 min-w-0">
+          <h3 class="font-disp font-semibold text-base">Condição da tela</h3>
+          <p class="micro mt-1">SEJA HONESTO — A CONFERÊNCIA É NA HORA</p>
+        </div>
+        <span class="step-status mono hidden sm:block" id="st3">—</span>
+        <span class="step-check"><svg viewBox="0 0 12 10"><path d="M1 5.2 4.4 8.6 11 1.4" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </div>
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5" id="scrGrid"></div>
+    </div>
+
+    <!-- STEP 04 · DEFECTS -->
+    <div class="step glass done" data-step="4">
+      <div class="flex items-center gap-4 mb-4">
+        <span class="step-num">04</span>
+        <div class="flex-1 min-w-0">
+          <h3 class="font-disp font-semibold text-base">Defeitos funcionais</h3>
+          <p class="micro mt-1">MARQUE O QUE NÃO FUNCIONA 100%</p>
+        </div>
+        <span class="step-status mono hidden sm:block" id="st4">—</span>
+        <span class="step-check"><svg viewBox="0 0 12 10"><path d="M1 5.2 4.4 8.6 11 1.4" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-3" id="defList"></div>
+    </div>
+
+    <!-- STEP 05 · ACCESSORIES -->
+    <div class="step glass done" data-step="5">
+      <span class="tick" style="bottom:-1px;left:-1px;border-width:0 0 1.5px 1.5px;border-radius:0 0 0 4px"></span>
+      <span class="tick" style="bottom:-1px;right:-1px;border-width:0 1.5px 1.5px 0;border-radius:0 0 4px 0"></span>
+      <div class="flex items-center gap-4 mb-5">
+        <span class="step-num">05</span>
+        <div class="flex-1 min-w-0">
+          <h3 class="font-disp font-semibold text-base">Acessórios inclusos</h3>
+          <p class="micro mt-1">ITENS QUE GERAM CRÉDITO EXTRA</p>
+        </div>
+        <span class="step-status mono hidden sm:block" id="st5">—</span>
+        <span class="step-check"><svg viewBox="0 0 12 10"><path d="M1 5.2 4.4 8.6 11 1.4" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </div>
+      <div class="flex flex-wrap gap-2.5" id="accList"></div>
+    </div>
+
+    <!-- TIP -->
+    <div class="glass rounded-2xl px-5 py-4 flex items-center gap-4" id="tipCard">
+      <div class="w-9 h-9 rounded-xl grid place-items-center flex-shrink-0" style="background:rgba(0,255,163,.08);border:1px solid rgba(0,255,163,.25)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00FFA3" stroke-width="2" stroke-linecap="round"><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l2.5 2.5M16.5 16.5 19 19M19 5l-2.5 2.5M7.5 16.5 5 19"/><circle cx="12" cy="12" r="3.5"/></svg>
+      </div>
+      <p class="text-xs text-[#8FA79B] leading-relaxed"><span class="mono text-neon text-[10px] tracking-widest">DICA · </span>Aparelhos com <b class="text-white font-medium">nota fiscal</b> e caixa original valem até <b class="text-neon font-medium">+R$ 200</b> a mais na avaliação final.</p>
+    </div>
+  </section>
+
+  <!-- ============ RIGHT : SUMMARY ============ -->
+  <aside class="lg:col-span-5 lg:sticky lg:top-6 summary-wrap" id="summaryCard">
+    <div class="summary p-6 md:p-7" id="summaryInner">
+
+      <div class="flex items-center justify-between mb-5">
+        <p class="micro flex items-center gap-2"><span class="dot-live"></span>RESUMO · TEMPO REAL</p>
+        <span class="micro">#CHECKOUT</span>
+      </div>
+
+      <!-- new phone -->
+      <p class="micro mb-3">APARELHO NOVO</p>
+      <div class="flex gap-2 overflow-x-auto no-scrollbar pb-1 mb-6 -mx-1 px-1" style="scroll-snap-type:x mandatory" id="newRow"></div>
+
+      <!-- breakdown -->
+      <div class="border-t border-white/8 pt-4" style="border-color:rgba(255,255,255,.07)">
+        <div class="row"><span class="text-white/90 font-medium" id="sumPhoneName">iPhone 15 Pro</span><b id="rNew">R$ 9.999</b></div>
+        <div class="row dim"><span>Valor base do usado</span><b id="rBase">R$ 0</b></div>
+        <div class="row dim"><span>Ajuste bateria · <span id="rBatPct" class="mono text-[11px]">88%</span></span><b id="rBat">−R$ 0</b></div>
+        <div class="row dim"><span>Ajuste tela · <span id="rScrLbl" class="mono text-[11px]">—</span></span><b id="rScr">−R$ 0</b></div>
+        <div class="row dim"><span>Defeitos · <span id="rDefN" class="mono text-[11px]">0</span></span><b id="rDef">−R$ 0</b></div>
+        <div class="row pos"><span>Acessórios · <span id="rAccN" class="mono text-[11px]">0</span></span><b id="rAcc">+R$ 0</b></div>
+        <div class="my-3 h-px" style="background:linear-gradient(90deg,transparent,rgba(0,255,163,.4),transparent)"></div>
+        <div class="row trade"><span>CRÉDITO TRADE-IN</span><b id="rTrade">−R$ 0</b></div>
+      </div>
+
+      <!-- composition -->
+      <div class="mt-5">
+        <div class="comp"><div id="compFill"></div></div>
+        <div class="flex justify-between micro mt-2">
+          <span>COBERTO PELO USADO · <b class="text-neon" id="compPct">0%</b></span>
+          <span>VOCÊ PAGA · <b class="text-white/80" id="compRest">0%</b></span>
+        </div>
+      </div>
+
+      <!-- TOTAL -->
+      <div class="mt-7 text-center relative" id="totalBlock">
+        <div class="absolute left-1/2 -translate-x-1/2 -top-3 w-40 h-px" style="background:linear-gradient(90deg,transparent,rgba(0,255,163,.6),transparent)"></div>
+        <p class="total-label mb-2">CLIENTE PAGA SÓ</p>
+        <div class="total-value" id="totalVal">R$ 0</div>
+        <p class="mono text-[11px] text-[#8FA79B] mt-3 tracking-wider">À VISTA NO PIX · OU <span class="text-white" id="instVal">12x de R$ 0</span> SEM JUROS</p>
+        <div class="mt-4"><span class="save-pill">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+          ECONOMIA DE <b id="saveVal">R$ 0</b> · <b id="savePct">0%</b> OFF
+        </span></div>
+      </div>
+
+      <!-- CTA -->
+      <button class="cta mt-7" id="ctaBtn">FINALIZAR TROCA →</button>
+
+      <!-- trust -->
+      <div class="grid grid-cols-3 gap-2 mt-5 pt-5 border-t" style="border-color:rgba(255,255,255,.07)">
+        <div class="text-center">
+          <svg class="mx-auto mb-1.5" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#00FFA3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-3.5 8-10V5l-8-3-8 3v7c0 6.5 8 10 8 10z"/></svg>
+          <p class="micro" style="font-size:8.5px">GARANTIA<br>7 DIAS</p>
+        </div>
+        <div class="text-center">
+          <svg class="mx-auto mb-1.5" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#00FFA3" stroke-width="2" stroke-linecap="round"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+          <p class="micro" style="font-size:8.5px">PIX<br>INSTANTÂNEO</p>
+        </div>
+        <div class="text-center">
+          <svg class="mx-auto mb-1.5" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#00FFA3" stroke-width="2" stroke-linecap="round"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg>
+          <p class="micro" style="font-size:8.5px">500+ LOJAS<br>PARCEIRAS</p>
+        </div>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<footer class="relative z-10 max-w-[1440px] mx-auto px-8 pb-10 pt-4 flex flex-col md:flex-row items-center justify-between gap-3 border-t border-white/5">
+  <p class="micro">TROQ. © 2024 · AVALIAÇÃO SUJEITA À CONFERÊNCIA PRESENCIAL</p>
+  <p class="micro flex items-center gap-2"><span class="dot-live"></span>CRIPTOGRAFIA DE PONTA A PONTA</p>
+</footer>
+
+<!-- MODAL -->
+<div id="modal" role="dialog" aria-modal="true">
+  <div class="ovl" id="mOvl"></div>
+  <div class="modal-card" id="mCard">
+    <div class="w-14 h-14 mx-auto rounded-full grid place-items-center mb-4" style="background:rgba(0,255,163,.1);border:1px solid rgba(0,255,163,.5);box-shadow:0 0 34px rgba(0,255,163,.35)">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#00FFA3" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+    </div>
+    <h3 class="font-disp font-bold text-2xl text-center tracking-tight">Troca confirmada<span class="text-neon">.</span></h3>
+    <p class="micro text-center mt-2">PROTOCOLO <span class="text-neon" id="mProto">#TRQ-000000</span></p>
+
+    <div class="mt-6 space-y-1.5 text-[13px]">
+      <div class="row dim"><span>Usado avaliado</span><b id="mDev" class="text-white">—</b></div>
+      <div class="row dim"><span>Crédito trade-in</span><b class="text-neon" id="mTrade">—</b></div>
+      <div class="my-2 h-px" style="background:linear-gradient(90deg,transparent,rgba(0,255,163,.4),transparent)"></div>
+      <div class="row"><span class="text-white font-medium">Cliente paga só</span><b class="text-neon text-lg" style="text-shadow:0 0 18px rgba(0,255,163,.5)" id="mTotal">—</b></div>
+    </div>
+
+    <div class="w-40 mx-auto mt-6 qr-wrap"><div id="mQr"></div></div>
+    <p class="micro text-center mt-4 leading-relaxed">APRESENTE O CÓDIGO EM UMA LOJA PARCEIRA<br>VÁLIDO ATÉ <span class="text-white" id="mExp">—</span></p>
+
+    <button class="cta mt-6" id="mClose" style="padding:14px">ENTENDIDO</button>
+  </div>
+</div>
+
+<script>
+/* ================= DATA ================= */
+const DEVICES = {
+  ip14pro:{name:'iPhone 14 Pro', base:3450},
+  ip13:   {name:'iPhone 13',     base:2350},
+  ip12:   {name:'iPhone 12',     base:1650},
+  ip11:   {name:'iPhone 11',     base:1050},
+  s23:    {name:'Galaxy S23',    base:2150},
+  s22:    {name:'Galaxy S22',    base:1550},
+  s21fe:  {name:'Galaxy S21 FE', base:950},
+  note12: {name:'Redmi Note 12', base:520},
+};
+const NEWPHONES = {
+  ip15pm: {name:'iPhone 15 Pro Max', price:11499},
+  ip15pro:{name:'iPhone 15 Pro',     price:9999},
+  ip15:   {name:'iPhone 15',         price:7299},
+  s24u:   {name:'Galaxy S24 Ultra',  price:9699},
+  s24:    {name:'Galaxy S24',        price:5599},
+  p8pro:  {name:'Pixel 8 Pro',       price:6999},
+};
+const SCREENS = {
+  none:   {label:'Perfeita',         mult:1.00, hint:'−0%'},
+  light:  {label:'Riscos leves',     mult:0.90, hint:'−10%'},
+  deep:   {label:'Riscos profundos', mult:0.74, hint:'−26%'},
+  cracked:{label:'Trincada',         mult:0.48, hint:'−52%'},
+};
+const DEFECTS = {
+  faceid: {label:'Face ID / Biometria', cost:280},
+  camera: {label:'Câmera',              cost:320},
+  buttons:{label:'Botões físicos',      cost:130},
+  speaker:{label:'Áudio / Microfone',   cost:160},
+  charge: {label:'Carregamento',        cost:210},
+  burnin: {label:'Manchas / Burn-in',   cost:380},
+};
+const ACCESSORIES = {
+  box:    {label:'Caixa original', bonus:80},
+  charger:{label:'Carregador',     bonus:70},
+  cable:  {label:'Cabo',           bonus:40},
+  invoice:{label:'Nota fiscal',    bonus:120},
+};
+
+const state = { device:'ip13', battery:88, screen:'light', defects:new Set(), accessories:new Set(['box','cable']), newPhone:'ip15pro' };
+
+// Carregar dados reais da loja se disponíveis
+let storeData = null;
+const storageKey = 'strategyos_v3';
+try {
+    const saved = localStorage.getItem(storageKey);
+    if (saved) {
+        storeData = JSON.parse(saved);
+        console.log('StrategyOS: Dados da loja carregados no simulador.');
+    }
+} catch(e) { console.error('Erro ao ler localStorage:', e); }
+
+// Sobrescrever celulares novos do estoque real da loja
+if (storeData && storeData.estoqueCelulares) {
+    const disponiveis = storeData.estoqueCelulares.filter(p => p.status === 'disponivel');
+    if (disponiveis.length > 0) {
+        for (const key in NEWPHONES) delete NEWPHONES[key];
+        disponiveis.forEach(p => {
+            const cleanKey = 'real_' + p.id;
+            NEWPHONES[cleanKey] = { name: p.nome, price: p.precoVenda, id: p.id, originalObj: p };
+        });
+        state.newPhone = Object.keys(NEWPHONES)[0];
+    }
+}
+
+// Sobrescrever tabela de referência de usados da loja
+if (storeData && storeData.precosReferenciaUsados) {
+    const ref = storeData.precosReferenciaUsados;
+    if (Object.keys(ref).length > 0) {
+        for (const key in DEVICES) delete DEVICES[key];
+        Object.entries(ref).forEach(([modelo, valor]) => {
+            const cleanKey = 'ref_' + modelo.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+            DEVICES[cleanKey] = { name: modelo.toUpperCase(), base: valor };
+        });
+        state.device = Object.keys(DEVICES)[0];
+    }
+}
+
+const fmt0 = new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL',maximumFractionDigits:0});
+const fmt2 = new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
+const $ = id => document.getElementById(id);
+
+/* ================= BUILD INPUTS ================= */
+const checkSVG = '<svg viewBox="0 0 12 10"><path d="M1 5.2 4.4 8.6 11 1.4" stroke="#FF5A6E" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+$('devGrid').innerHTML = Object.entries(DEVICES).map(([k,d])=>`
+  <label class="dev"><input type="radio" name="dev" value="${k}" class="sr-only" ${k===state.device?'checked':''}>
+    <span class="dev-in"><span class="dev-dot"></span><span class="text-[13px] font-medium">${d.name}</span><span class="dev-base mono">${fmt0.format(d.base)}</span></span>
+  </label>`).join('');
+
+$('scrGrid').innerHTML = Object.entries(SCREENS).map(([k,s])=>`
+  <label class="pill"><input type="radio" name="screen" value="${k}" class="sr-only" ${k===state.screen?'checked':''}>
+    <span class="pill-in">${s.label}<em>${s.hint}</em></span>
+  </label>`).join('');
+
+$('defList').innerHTML = Object.entries(DEFECTS).map(([k,d])=>`
+  <label class="defrow"><input type="checkbox" class="sr-only" data-def="${k}">
+    <span class="cbox">${checkSVG}</span><span class="def-lbl flex-1 transition-colors">${d.label}</span>
+    <span class="mono text-[11px]" style="color:rgba(255,150,160,.6)">−${fmt0.format(d.cost)}</span>
+  </label>`).join('');
+
+$('accList').innerHTML = Object.entries(ACCESSORIES).map(([k,a])=>`
+  <label class="achip"><input type="checkbox" class="sr-only" data-acc="${k}" ${state.accessories.has(k)?'checked':''}>
+    <span class="achip-in"><span class="plus">+</span>${a.label}<em>+${a.bonus}</em></span>
+  </label>`).join('');
+
+$('newRow').innerHTML = Object.entries(NEWPHONES).map(([k,p])=>`
+  <button class="nchip ${k===state.newPhone?'on':''}" data-new="${k}">${p.name}<em>${fmt0.format(p.price)}</em></button>`).join('');
+
+/* ================= CALC ENGINE ================= */
+function battMult(b){ return b>=90?1 : b>=80?0.92 : b>=70?0.80 : b>=60?0.66 : 0.52; }
+function battTier(b){
+  if(b>=90) return ['EXCELENTE','#00FFA3'];
+  if(b>=80) return ['BOA','#7CFFB2'];
+  if(b>=70) return ['REGULAR','#FFD166'];
+  if(b>=60) return ['DESGASTADA','#FF9F5A'];
+  return ['CRÍTICA','#FF5A6E'];
+}
+function compute(){
+  const dev = DEVICES[state.device], np = NEWPHONES[state.newPhone];
+  const bm = battMult(state.battery), sm = SCREENS[state.screen].mult;
+  const batDed  = Math.round(dev.base * (1 - bm));
+  const scrDed  = Math.round(dev.base * bm * (1 - sm));
+  let defDed = 0; state.defects.forEach(k => defDed += DEFECTS[k].cost);
+  let accAdd = 0; state.accessories.forEach(k => accAdd += ACCESSORIES[k].bonus);
+  const trade = Math.max(0, Math.round(dev.base - batDed - scrDed - defDed + accAdd));
+  const total = Math.max(0, np.price - trade);
+  return { dev, np, bm, sm, batDed, scrDed, defDed, accAdd, trade, total };
+}
+
+/* ================= RENDER ================= */
+const disp = { trade:0, total:0 };
+let compTween;
+
+function render(animate=true){
+  const v = compute();
+
+  // instant rows
+  $('sumPhoneName').textContent = v.np.name;
+  $('rNew').textContent  = fmt0.format(v.np.price);
+  $('rBase').textContent = fmt0.format(v.dev.base);
+  $('rBatPct').textContent = state.battery + '%';
+  $('rBat').textContent  = '−' + fmt0.format(v.batDed);
+  $('rScrLbl').textContent = SCREENS[state.screen].label.toUpperCase();
+  $('rScr').textContent  = '−' + fmt0.format(v.scrDed);
+  $('rDefN').textContent = state.defects.size;
+  $('rDef').textContent  = '−' + fmt0.format(v.defDed);
+  $('rAccN').textContent = state.accessories.size;
+  $('rAcc').textContent  = '+' + fmt0.format(v.accAdd);
+  $('instVal').textContent = '12x de ' + fmt2.format(v.total/12);
+  $('saveVal').textContent = fmt0.format(v.trade);
+  $('savePct').textContent = Math.round(v.trade / v.np.price * 100) + '%';
+
+  // step statuses
+  $('st1').textContent = v.dev.name.toUpperCase();
+  const [tLbl] = battTier(state.battery);
+  $('st2').textContent = state.battery + '% · ' + tLbl;
+  $('st3').textContent = SCREENS[state.screen].label.toUpperCase();
+  $('st4').textContent = state.defects.size ? state.defects.size + ' DEFEITO' + (state.defects.size>1?'S':'') : 'SEM DEFEITOS';
+  $('st5').textContent = state.accessories.size + (state.accessories.size===1?' ITEM':' ITENS');
+
+  // battery visuals
+  const [,tCol] = battTier(state.battery);
+  $('batVal').textContent = state.battery;
+  $('batFill').setAttribute('width', (25 * state.battery/100).toFixed(1));
+  $('batFill').setAttribute('fill', tCol);
+  const tier = $('batTier');
+  tier.textContent = tLbl; tier.style.color = tCol; tier.style.borderColor = tCol+'66'; tier.style.background = tCol+'14';
+  $('batRange').style.setProperty('--p', ((state.battery-50)/50*100) + '%');
+
+  // composition bar
+  const pct = Math.min(100, Math.round(v.trade / v.np.price * 100));
+  $('compPct').textContent = pct + '%';
+  $('compRest').textContent = (100-pct) + '%';
+  if(compTween) compTween.kill();
+  compTween = gsap.to('#compFill', { width: pct + '%', duration:.9, ease:'power3.out' });
+
+  // tweened money
+  gsap.to(disp, {
+    trade: v.trade, total: v.total,
+    duration: animate ? .85 : 0, ease:'power3.out', overwrite:true,
+    onUpdate(){
+      $('rTrade').textContent  = '−' + fmt0.format(Math.round(disp.trade));
+      $('totalVal').textContent = fmt0.format(Math.round(disp.total));
+    }
+  });
+
+  // pulse total
+  if(animate){
+    gsap.fromTo('#totalBlock', {scale:1.025}, {scale:1, duration:.55, ease:'elastic.out(1,.55)'});
+    gsap.fromTo('#totalVal', {filter:'drop-shadow(0 0 44px rgba(0,255,163,.7))'},
+      {filter:'drop-shadow(0 0 26px rgba(0,255,163,.38))', duration:.9});
+  }
+}
+
+/* ================= EVENTS ================= */
+document.querySelectorAll('input[name=dev]').forEach(i => i.addEventListener('change', e => { state.device = e.target.value; render(); }));
+document.querySelectorAll('input[name=screen]').forEach(i => i.addEventListener('change', e => { state.screen = e.target.value; render(); }));
+document.querySelectorAll('[data-def]').forEach(i => i.addEventListener('change', e => {
+  e.target.checked ? state.defects.add(e.target.dataset.def) : state.defects.delete(e.target.dataset.def); render();
+}));
+document.querySelectorAll('[data-acc]').forEach(i => i.addEventListener('change', e => {
+  e.target.checked ? state.accessories.add(e.target.dataset.acc) : state.accessories.delete(e.target.dataset.acc); render();
+}));
+document.querySelectorAll('[data-new]').forEach(b => b.addEventListener('click', () => {
+  state.newPhone = b.dataset.new;
+  document.querySelectorAll('[data-new]').forEach(x => x.classList.toggle('on', x === b));
+  render();
+}));
+$('batRange').addEventListener('input', e => { state.battery = +e.target.value; render(); });
+
+// cursor glow on summary
+const inner = $('summaryInner');
+inner.addEventListener('pointermove', e => {
+  const r = inner.getBoundingClientRect();
+  inner.style.setProperty('--mx', ((e.clientX - r.left)/r.width*100) + '%');
+  inner.style.setProperty('--my', ((e.clientY - r.top)/r.height*100) + '%');
+});
+
+/* ================= MODAL + FAKE QR ================= */
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function makeQR(el, seed){
+  const n = 25, rnd = mulberry32(seed);
+  const finder = (x,y) => x<7 && y<7 || x>=n-7 && y<7 || x<7 && y>=n-7;
+  let cells = '';
+  for(let y=0;y<n;y++) for(let x=0;x<n;x++){
+    let on;
+    if(finder(x,y)){
+      const lx = x<7?x : x-(n-7), ly = y<7?y : y-(n-7);
+      on = (lx===0||lx===6||ly===0||ly===6) || (lx>=2&&lx<=4&&ly>=2&&ly<=4);
+    } else on = rnd() < .44;
+    if(on) cells += `<rect x="${x}" y="${y}" width="1" height="1"/>`;
+  }
+  el.innerHTML = `<svg viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges"><rect width="${n}" height="${n}" fill="#fff"/><g fill="#04120B">${cells}</g></svg>`;
+}
+// Função para registrar a troca de verdade no sistema
+async function registrarTrocaNoSistema(v) {
+    if (!storeData) {
+        console.log('StrategyOS: Sem dados locais da loja carregados para registrar a troca.');
+        return;
+    }
+    
+    console.log('StrategyOS: Gravando troca no sistema...');
+    try {
+        let prodNovoId = null;
+        let prodNovoNome = v.np.name;
+        let precoNovo = v.np.price;
+        
+        // Achar o produto novo no estoque se for do estoque real da loja
+        const newPhoneKey = state.newPhone;
+        if (newPhoneKey && newPhoneKey.startsWith('real_')) {
+            const cleanIdStr = newPhoneKey.replace('real_', '');
+            prodNovoId = parseInt(cleanIdStr) || cleanIdStr;
+            const prod = storeData.estoqueCelulares.find(p => p.id == prodNovoId);
+            if (prod) {
+                prod.status = 'vendido';
+                prod.dataVenda = new Date().toISOString().split('T')[0];
+                prodNovoNome = prod.nome;
+                precoNovo = prod.precoVenda;
+                console.log('StrategyOS: Celular do estoque marcado como vendido:', prodNovoNome);
+            }
+        }
+        
+        const clientePagou = v.total;
+        
+        // Registrar financeiro (adicionar ao caixa principal)
+        storeData.financeiro.caixaPrincipal = (storeData.financeiro.caixaPrincipal || 0) + clientePagou;
+        
+        // Registrar no histórico de vendas e movimentações
+        if (!storeData.historico) storeData.historico = {};
+        if (!storeData.historico.vendas) storeData.historico.vendas = [];
+        if (!storeData.historico.movimentacoes) storeData.historico.movimentacoes = [];
+        
+        const venda = {
+            tipo: 'troca',
+            data: new Date().toISOString(),
+            produtoNovo: prodNovoNome,
+            precoNovo: precoNovo,
+            celularUsado: v.dev.name,
+            valorUsado: v.trade,
+            clientePagou: clientePagou,
+            formaPagamento: 'troca_premium'
+        };
+        
+        storeData.historico.vendas.push(venda);
+        
+        storeData.historico.movimentacoes.push({
+            data: new Date().toISOString(),
+            tipo: 'venda',
+            descricao: `Troca Premium: ${v.dev.name} por ${prodNovoNome}`,
+            valor: clientePagou,
+            _meta: { valorVenda: clientePagou, caixa: 'principal' }
+        });
+        
+        // Salvar localmente
+        localStorage.setItem(storageKey, JSON.stringify(storeData));
+        console.log('StrategyOS: Troca salva no localStorage local com sucesso!');
+        
+        // Sincronizar com o Supabase
+        if (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.url && window.SUPABASE_CONFIG.anonKey) {
+            console.log('StrategyOS: Enviando dados da troca para o Supabase...');
+            const supabaseClient = supabase.createClient(window.SUPABASE_CONFIG.url, window.SUPABASE_CONFIG.anonKey);
+            const { error } = await supabaseClient
+                .from('strategyos_data')
+                .upsert({ id: 1, payload: storeData, updated_at: new Date().toISOString() });
+                
+            if (error) console.error('Erro de sincronização com Supabase:', error);
+            else console.log('StrategyOS: Sincronizado na nuvem com sucesso!');
+        }
+    } catch(err) {
+        console.error('Erro geral ao registrar troca no sistema:', err);
+    }
+}
+
+$('ctaBtn').addEventListener('click', () => {
+  const v = compute();
+  
+  // Registrar a troca no banco de dados local e nuvem
+  registrarTrocaNoSistema(v);
+  
+  const proto = 'TRQ-' + Math.floor(100000 + Math.random()*899999);
+  $('mProto').textContent = '#' + proto;
+  $('mDev').textContent = v.dev.name;
+  $('mTrade').textContent = '−' + fmt0.format(v.trade);
+  $('mTotal').textContent = fmt0.format(v.total);
+  const exp = new Date(Date.now() + 7*864e5);
+  $('mExp').textContent = exp.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'}).toUpperCase();
+  makeQR($('mQr'), parseInt(proto.slice(4)));
+  const m = $('modal'); m.style.display = 'flex';
+  gsap.fromTo('#mOvl', {opacity:0}, {opacity:1, duration:.35});
+  gsap.fromTo('#mCard', {opacity:0, y:36, scale:.94}, {opacity:1, y:0, scale:1, duration:.55, ease:'back.out(1.4)'});
+});
+function closeModal(){
+  gsap.to('#mCard', {opacity:0, y:24, scale:.95, duration:.3, ease:'power2.in'});
+  gsap.to('#mOvl', {opacity:0, duration:.3, onComplete(){ $('modal').style.display='none'; }});
+}
+$('mClose').addEventListener('click', closeModal);
+$('mOvl').addEventListener('click', closeModal);
+document.addEventListener('keydown', e => { if(e.key === 'Escape' && $('modal').style.display === 'flex') closeModal(); });
+
+/* ================= HEADER EXTRAS ================= */
+$('sessId').textContent = 'SIM-' + Math.floor(100000 + Math.random()*899999);
+setInterval(() => { $('clock').textContent = new Date().toLocaleTimeString('pt-BR'); }, 1000);
+$('clock').textContent = new Date().toLocaleTimeString('pt-BR');
+
+/* ================= ENTRANCE ================= */
+window.addEventListener('load', () => {
+  gsap.set('.step-check', {scale:0});
+  const tl = gsap.timeline({defaults:{ease:'power3.out'}});
+  tl.from('header', {y:-26, opacity:0, duration:.7})
+    .from('#leftHead', {y:22, opacity:0, duration:.6}, '-=.35')
+    .from('.step', {y:30, opacity:0, stagger:.09, duration:.65}, '-=.3')
+    .from('#tipCard', {y:20, opacity:0, duration:.5}, '-=.35')
+    .from('#summaryCard', {y:40, opacity:0, duration:.85}, '-=.75')
+    .to('.step-check', {scale:1, stagger:.1, duration:.45, ease:'back.out(2.4)',
+        onStart(){ document.querySelectorAll('.step-check').forEach(c => c.style.display='grid'); }}, '-=.5')
+    .to('#progressFill', {width:'100%', duration:1, ease:'power2.inOut'}, '-=.6');
+
+  gsap.to('#orb1', {y:50, x:-30, duration:11, yoyo:true, repeat:-1, ease:'sine.inOut'});
+  gsap.to('#orb2', {y:-44, x:36, duration:13, yoyo:true, repeat:-1, ease:'sine.inOut'});
+
+  render(false);
+  gsap.to(disp, { trade: compute().trade, total: compute().total, duration:1.4, delay:.5, ease:'power3.out',
+    onUpdate(){
+      $('rTrade').textContent = '−' + fmt0.format(Math.round(disp.trade));
+      $('totalVal').textContent = fmt0.format(Math.round(disp.total));
+    }});
+});
+render(false);
+</script>
+</body>
+</html>

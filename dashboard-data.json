@@ -1,0 +1,109 @@
+{
+  "financeiro": {
+    "caixaLivre": 2166.74,
+    "reservaEmergencia": 800
+  },
+  "patrimonio": {
+    "total": 12640.69,
+    "seguro": 12067.19,
+    "caixa": 2166.74,
+    "estoque": 8450.00,
+    "crediariosEmDia": 1450.45,
+    "crediariosAtraso": 573.50
+  },
+  "meta": {
+    "objetivo": 20000,
+    "acumulado": 0,
+    "prazo": "2026-12-31",
+    "progressoPct": 0
+  },
+  "crediarios": [
+    {
+      "cliente": "Jaqueline",
+      "valorTotal": 947.00,
+      "parcelasTotal": 3,
+      "parcelasPagas": 0,
+      "status": "inadimplente",
+      "score": 320
+    },
+    {
+      "cliente": "Aline",
+      "valorTotal": 1450.45,
+      "parcelasTotal": 5,
+      "parcelasPagas": 0,
+      "status": "em_dia",
+      "score": 700
+    },
+    {
+      "cliente": "Rapaz do Vidro",
+      "valorTotal": 200.00,
+      "parcelasTotal": 1,
+      "parcelasPagas": 0,
+      "status": "atrasado",
+      "score": 250
+    }
+  ],
+  "estoque": [
+    {
+      "nome": "iPhone 13",
+      "custo": 2800,
+      "precoVenda": 3500,
+      "lucro": 700,
+      "margem": 25
+    },
+    {
+      "nome": "iPhone 12 128GB",
+      "custo": 1900,
+      "precoVenda": 2600,
+      "lucro": 700,
+      "margem": 36.8
+    },
+    {
+      "nome": "iPhone 11 64GB",
+      "custo": 1400,
+      "precoVenda": 1900,
+      "lucro": 500,
+      "margem": 35.7
+    },
+    {
+      "nome": "iPhone 8 Plus",
+      "custo": 600,
+      "precoVenda": 850,
+      "lucro": 250,
+      "margem": 41.7
+    },
+    {
+      "nome": "AirPods 2ª Geração",
+      "custo": 350,
+      "precoVenda": 480,
+      "lucro": 130,
+      "margem": 37.1
+    }
+  ],
+  "patrimonioHistorico": [
+    {
+      "mes": "Set/2025",
+      "valor": 8500
+    },
+    {
+      "mes": "Out/2025",
+      "valor": 9200
+    },
+    {
+      "mes": "Nov/2025",
+      "valor": 10100
+    },
+    {
+      "mes": "Dez/2025",
+      "valor": 11000
+    },
+    {
+      "mes": "Jan/2026",
+      "valor": 11800
+    },
+    {
+      "mes": "Fev/2026",
+      "valor": 12640.69
+    }
+  ]
+}

@@ -1,0 +1,1184 @@
+/* ==========================================================================
+   STRATEGYOS 3.0 - PREMIUM DOURADO REDESIGN
+   ========================================================================== */
+
+/* === BACKGROUND GERAL E PARTICULAS === */
+body {
+    background-color: #0c0f1d !important;
+    background-image: radial-gradient(circle at center, #1A1F3A 0%, #0A0E27 100%) !important;
+    position: relative;
+    color: #FFFFFF;
+}
+
+body::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    opacity: 0.02;
+    z-index: -1;
+    pointer-events: none;
+}
+
+/* === VARIÁVEIS OVERRIDE === */
+:root,
+.tema-escuro,
+body:not(.tema-claro) {
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-expo: cubic-bezier(0.7, 0, 0.84, 0);
+    --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    --duration-fast: 150ms;
+    --duration-normal: 220ms;
+    --duration-slow: 350ms;
+
+    --bg-main: #0A0E27;
+    --bg-card: rgba(255, 215, 0, 0.05);
+    --bg-card-hover: rgba(255, 215, 0, 0.08);
+    /* glassmorphism */
+    --bg-input: rgba(255, 255, 255, 0.03);
+    --border-color: rgba(255, 215, 0, 0.2);
+    --text-main: #FFFFFF;
+    --text-muted: rgba(255, 255, 255, 0.7);
+    --text-dim: rgba(255, 215, 0, 0.4);
+    --accent-green: #50C878;
+    --accent-red: #DC143C;
+    --accent-yellow: #FFD700;
+    --accent-cyan: #FFD700;
+    --accent-blue: #4169E1;
+    --accent-purple: #B8860B;
+    --gradient-hero: linear-gradient(135deg, #0A0E27 0%, #1A1F3A 50%, #2D3250 100%);
+    --gradient-btn: linear-gradient(135deg, #FFD700 0%, #FFA500 50%, #FF8C00 100%);
+    --shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    --shadow-sm: inset 0 1px 0 0 rgba(255, 215, 0, 0.2);
+    --modal-bg: rgba(10, 14, 39, 0.95);
+    --header-bg: linear-gradient(135deg, rgba(255, 215, 0, 0.15), rgba(255, 215, 0, 0.05));
+    --sidebar-bg: linear-gradient(180deg, rgba(10, 14, 39, 0.95) 0%, rgba(26, 31, 58, 0.95) 100%);
+    --radius-lg: 24px;
+}
+
+/* === GLASSMORPHISM / CARDS === */
+.card,
+.dash-card,
+.meta-section,
+.product-card,
+.reg-card,
+.table-container,
+.modal-content,
+.hero-section {
+    background: rgba(255, 215, 0, 0.05) !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 215, 0, 0.2) !important;
+    border-radius: 24px !important;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37), inset 0 1px 0 0 rgba(255, 215, 0, 0.2) !important;
+    transition: all 0.3s ease !important;
+}
+
+.dash-card:hover,
+.product-card:hover,
+.reg-card:hover,
+.hover-3d:hover {
+    transform: translateY(-5px) !important;
+    border-color: rgba(255, 215, 0, 0.45) !important;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 215, 0, 0.12) !important;
+}
+
+/* === INTERACTIVE NEON GLOW (Ambient Light) === */
+.dash-card,
+.product-card,
+.reg-card {
+    position: relative;
+    overflow: hidden;
+}
+
+.dash-card::before,
+.product-card::before,
+.reg-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(255, 215, 0, 0.25) 0%, transparent 60%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.dash-card:hover::before,
+.product-card:hover::before,
+.reg-card:hover::before {
+    opacity: 1;
+}
+
+.dash-card>*,
+.product-card>*,
+.reg-card>* {
+    position: relative;
+    z-index: 1;
+}
+
+/* === BOTÕES PREMIUM (Animações Baseadas Original) === */
+.btn-primary,
+.btn-success {
+    /* bg, border e color removidos para puxar do style original */
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    transition: all 0.25s var(--ease-out-expo) !important;
+    position: relative;
+    overflow: hidden;
+    padding: 12px 16px !important;
+}
+
+.btn-primary::before,
+.btn-success::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, transparent 60%);
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 0;
+    transition: transform 0.5s var(--ease-out-expo), opacity 0.3s;
+    pointer-events: none;
+}
+
+.btn-primary:active::before,
+.btn-success:active::before {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+    transition: 0s;
+}
+
+.btn-primary:hover,
+.btn-success:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.1);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3) !important;
+}
+
+.btn-primary:active,
+.btn-success:active {
+    transform: scale(0.98) !important;
+    box-shadow: 0 5px 15px rgba(255, 215, 0, 0.3) !important;
+}
+
+/* Permitindo cores originais para botões outline */
+.btn-outline,
+.btn-ghost {
+    background: transparent !important;
+    border-radius: 16px !important;
+    font-weight: 600 !important;
+    padding: 10px 16px !important;
+    transition: all 0.2s var(--ease-out-expo) !important;
+    box-shadow: none !important;
+}
+
+.btn-outline:hover,
+.btn-ghost:hover {
+    background: rgba(255, 215, 0, 0.1) !important;
+    border-color: #FFA500 !important;
+    color: #FFA500 !important;
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.3) !important;
+}
+
+/* === INPUTS PREMIUM === */
+.form-input,
+.form-select,
+.form-textarea {
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 215, 0, 0.2) !important;
+    border-radius: 12px !important;
+    padding: 16px 20px !important;
+    color: #FFFFFF !important;
+    font-size: 16px !important;
+    backdrop-filter: blur(10px) !important;
+    transition: all 0.3s ease !important;
+}
+
+.form-input::placeholder,
+.form-textarea::placeholder {
+    color: rgba(255, 215, 0, 0.4) !important;
+    font-style: italic !important;
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+    border: 2px solid #FFD700 !important;
+    box-shadow: 0 0 0 4px rgba(255, 215, 0, 0.1), 0 0 20px rgba(255, 215, 0, 0.3) !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    outline: none !important;
+}
+
+.form-label {
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    letter-spacing: 1px !important;
+    text-transform: uppercase !important;
+}
+
+/* === MENU LATERAL PREMIUM === */
+.sidebar {
+    background: linear-gradient(180deg, rgba(10, 14, 39, 0.95) 0%, rgba(26, 31, 58, 0.95) 100%) !important;
+    backdrop-filter: blur(20px) !important;
+    width: 280px !important;
+    border-right: 1px solid rgba(255, 215, 0, 0.2) !important;
+    box-shadow: 4px 0 30px rgba(0, 0, 0, 0.5) !important;
+}
+
+.main-content {
+    margin-left: 280px !important;
+}
+
+.nav-btn {
+    padding: 14px 24px !important;
+    border-radius: 12px !important;
+    margin: 6px 12px !important;
+    transition: all 0.3s ease !important;
+    background: transparent !important;
+    color: rgba(255, 255, 255, 0.7) !important;
+    width: calc(100% - 24px) !important;
+}
+
+.nav-btn:hover {
+    background: rgba(255, 215, 0, 0.1) !important;
+    transform: translateX(8px) !important;
+    border-left: 3px solid #FFD700 !important;
+}
+
+.nav-btn.active {
+    background: linear-gradient(90deg, rgba(255, 215, 0, 0.2) 0%, rgba(255, 215, 0, 0.05) 100%) !important;
+    font-weight: 700 !important;
+    border-left: 4px solid #FFD700 !important;
+    box-shadow: 0 4px 12px rgba(255, 215, 0, 0.2) !important;
+}
+
+.nav-btn:hover .nav-icon {
+    animation: bounce 0.5s ease;
+}
+
+@keyframes bounce {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-4px);
+    }
+}
+
+/* === HEADER PREMIUM === */
+.app-header {
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.15), rgba(255, 215, 0, 0.05)) !important;
+    border-bottom: 1px solid rgba(255, 215, 0, 0.3) !important;
+    backdrop-filter: blur(15px);
+}
+
+.app-title {
+    font-weight: 800;
+    letter-spacing: 1px;
+    filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.4));
+}
+
+/* === PAGE ANIMATIONS === */
+.page-section {
+    animation: fadeSlideUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes fadeSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* === TOASTS PREMIUM === */
+.toast-success {
+    background: linear-gradient(135deg, #50C878, #3CB371) !important;
+}
+
+.toast-error {
+    background: linear-gradient(135deg, #DC143C, #B22222) !important;
+    animation: shake 0.5s !important;
+}
+
+.toast-warning {
+    background: linear-gradient(135deg, #FFD700, #FFA500) !important;
+    color: #0A0E27 !important;
+}
+
+@keyframes shake {
+
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+
+    10%,
+    30%,
+    50%,
+    70%,
+    90% {
+        transform: translateX(-5px);
+    }
+
+    20%,
+    40%,
+    60%,
+    80% {
+        transform: translateX(5px);
+    }
+}
+
+/* === MODAL PREMIUM === */
+.modal-overlay.active {
+    backdrop-filter: blur(5px) !important;
+    background: rgba(0, 0, 0, 0.8) !important;
+}
+
+.modal-content {
+    animation: springModal 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards !important;
+    border: 2px solid rgba(255, 215, 0, 0.3) !important;
+    box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6) !important;
+}
+
+@keyframes springModal {
+    from {
+        opacity: 0;
+        transform: scale(0.7) translateY(50px);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* === TABLES PREMIUM === */
+table th {
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.15), rgba(255, 215, 0, 0.05)) !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 1.5px !important;
+    padding: 16px !important;
+    border-bottom: 2px solid rgba(255, 215, 0, 0.3) !important;
+}
+
+table tr {
+    background: rgba(255, 255, 255, 0.02) !important;
+    border-bottom: 1px solid rgba(255, 215, 0, 0.1) !important;
+    transition: all 0.3s ease !important;
+}
+
+table tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.01) !important;
+}
+
+table tr:hover {
+    background: rgba(255, 215, 0, 0.06) !important;
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+/* === BADGES PREMIUM === */
+.badge-green,
+.product-badge.success {
+    background: linear-gradient(135deg, #50C878, #3CB371) !important;
+    color: #FFFFFF !important;
+    padding: 6px 14px !important;
+    border-radius: 20px !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    box-shadow: 0 4px 12px rgba(80, 200, 120, 0.3) !important;
+}
+
+.badge-yellow,
+.product-badge.warning {
+    background: linear-gradient(135deg, #FFD700, #FFA500) !important;
+    color: #0A0E27 !important;
+    padding: 6px 14px !important;
+    border-radius: 20px !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+}
+
+.badge-red,
+.product-badge.danger {
+    background: linear-gradient(135deg, #DC143C, #B22222) !important;
+    color: #FFFFFF !important;
+    padding: 6px 14px !important;
+    border-radius: 20px !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+}
+
+/* === PROGRESS BARS PREMIUM === */
+.meta-bar {
+    height: 32px !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 215, 0, 0.2) !important;
+    border-radius: 16px !important;
+    overflow: hidden !important;
+}
+
+.meta-fill {
+    background: linear-gradient(90deg, #FFD700, #FFA500, #FFD700) !important;
+    background-size: 200% 100% !important;
+    animation: gradientShift 3s ease infinite !important;
+    height: 100% !important;
+    border-radius: 16px !important;
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+}
+
+@keyframes gradientShift {
+    0% {
+        background-position: 100% 0;
+    }
+
+    100% {
+        background-position: -100% 0;
+    }
+}
+
+/* === ANIMAÇÕES === */
+@keyframes pulseVendedor {
+
+    0%,
+    100% {
+        transform: scale(1.0);
+        box-shadow: 0 10px 40px rgba(255, 215, 0, 0.6);
+    }
+
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 15px 50px rgba(255, 215, 0, 0.8);
+    }
+}
+
+/* === MODO VENDEDOR TELA CHEIA E GRID === */
+.vendedor-fullscreen-container {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    /* NO SCROLL */
+    background: radial-gradient(circle at center, #1a1f3a 0%, #0a0e27 100%) !important;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1000;
+}
+
+.vendedor-grid {
+    max-width: 1200px;
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin: 20px auto;
+    box-sizing: border-box;
+}
+
+.vendedor-grid .reg-card {
+    width: 100% !important;
+    min-height: 140px !important;
+    height: auto !important;
+    max-width: none !important;
+    grid-column: auto !important;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 20px 14px !important;
+    box-sizing: border-box !important;
+}
+
+.vendedor-grid .reg-card .reg-card-icon {
+    font-size: 42px;
+    margin-bottom: 8px;
+    filter: drop-shadow(0 4px 8px rgba(255, 215, 0, 0.4));
+}
+
+.vendedor-grid .reg-card .reg-card-title {
+    font-size: 22px;
+    font-weight: bold;
+    background: linear-gradient(135deg, #FFD700, #FFA500);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.vendedor-grid .reg-card.acessorios-card {
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.15) 0%, rgba(255, 215, 0, 0.08) 100%) !important;
+    border: 2px solid rgba(255, 215, 0, 0.4) !important;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+}
+
+.vendedor-grid .reg-card.acessorios-card:hover {
+    background: rgba(255, 215, 0, 0.25) !important;
+    border: 2px solid rgba(255, 215, 0, 0.6) !important;
+    box-shadow: 0 25px 70px rgba(255, 215, 0, 0.5) !important;
+}
+
+.vendedor-grid .reg-card.acessorios-card .reg-card-title {
+    -webkit-text-fill-color: #FFFFFF;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+@media (max-width: 900px) {
+    .vendedor-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+}
+
+/* === CUSTOM SCROLLBAR === */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(255, 215, 0, 0.1);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(#FFD700, #FFA500);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #FFD700;
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.8);
+}
+
+/* === SKELETON LOADING === */
+.skeleton {
+    background: linear-gradient(90deg, rgba(255, 215, 0, 0.05) 0%, rgba(255, 215, 0, 0.15) 50%, rgba(255, 215, 0, 0.05) 100%) !important;
+    background-size: 200% 100% !important;
+    animation: shimmer 1.5s infinite !important;
+    border-radius: 12px !important;
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: 200% 0;
+    }
+
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+/* === PARCELAMENTO SIMULADOR UI === */
+.simulator-result-card {
+    background: rgba(255, 215, 0, 0.05);
+    border: 1px solid rgba(255, 215, 0, 0.3);
+    border-radius: 20px;
+    padding: 24px;
+    margin-top: 20px;
+    box-shadow: 0 10px 30px rgba(255, 215, 0, 0.1);
+}
+
+.huge-price {
+    font-size: 48px;
+    font-weight: 800;
+    color: #FFD700;
+    text-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+    margin: 10px 0;
+}
+
+.simulator-installments-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 10px;
+}
+
+.simulator-installment-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 215, 0, 0.2);
+    border-radius: 12px;
+    padding: 12px;
+    color: #FFD700;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s;
+}
+
+.simulator-installment-btn:hover,
+.simulator-installment-btn.active {
+    background: rgba(255, 215, 0, 0.15);
+    border-color: #FFD700;
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.2);
+    transform: translateY(-2px);
+}
+
+/* === PARTICULAS CANVAS COMPONENT === */
+#particles-canvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    z-index: 1;
+    /* Below everything but above body bg */
+}
+
+/* === FLOATING LABELS === */
+.form-float {
+    position: relative;
+    margin-bottom: 20px;
+}
+
+.form-float input,
+.form-float textarea {
+    width: 100%;
+    padding: 20px 16px 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 215, 0, 0.2);
+    border-radius: 12px;
+    color: #fff;
+    font-size: 15px;
+    transition: border-color 0.2s var(--ease-out-expo), box-shadow 0.2s ease;
+}
+
+.form-float label {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: rgba(255, 215, 0, 0.5);
+    font-size: 15px;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    pointer-events: none;
+    transition: all 0.2s var(--ease-out-expo);
+}
+
+.form-float input:focus+label,
+.form-float input:not(:placeholder-shown)+label,
+.form-float textarea:focus+label,
+.form-float textarea:not(:placeholder-shown)+label {
+    top: 10px;
+    transform: translateY(0);
+    font-size: 11px;
+    font-weight: 600;
+    color: #FFD700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+}
+
+.form-float input:focus,
+.form-float textarea:focus {
+    border-color: #FFD700;
+    box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.1), 0 0 20px rgba(255, 215, 0, 0.15);
+    outline: none;
+}
+
+.form-float input::placeholder {
+    opacity: 0;
+}
+
+/* ====================================
+   MOBILE RESPONSIVENESS REDESIGN (VERTICAL/PORTRAIT FOCUS)
+   ==================================== */
+body.vendedor-fullscreen {
+    background: #040508 !important;
+    position: relative;
+    overflow-x: hidden;
+    color: #E2E8F0 !important;
+}
+
+/* Efeito de iluminação neon flutuante ao fundo (Glow Atmosférico) */
+body.vendedor-fullscreen::before,
+body.vendedor-fullscreen::after {
+    content: '';
+    position: fixed;
+    width: 250px;
+    height: 250px;
+    border-radius: 50%;
+    filter: blur(120px);
+    opacity: 0.15;
+    z-index: 0;
+    pointer-events: none;
+}
+
+body.vendedor-fullscreen::before {
+    background: #FFD700;
+    top: -50px;
+    left: -50px;
+    animation: pulseGlow 8s infinite alternate;
+}
+
+body.vendedor-fullscreen::after {
+    background: #ec4899;
+    bottom: -50px;
+    right: -50px;
+    animation: pulseGlow 10s infinite alternate-reverse;
+}
+
+@keyframes pulseGlow {
+    0% { transform: scale(1) translate(0, 0); opacity: 0.12; }
+    100% { transform: scale(1.3) translate(30px, 20px); opacity: 0.22; }
+}
+
+body.vendedor-fullscreen #main-content {
+    position: relative;
+    z-index: 1;
+    background: transparent !important;
+}
+
+/* Cabeçalho do Vendedor */
+body.vendedor-fullscreen .vendedor-container h2 {
+    font-family: 'Space Grotesk', sans-serif !important;
+    font-size: 24px !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #FFFFFF 0%, rgba(255,255,255,0.7) 100%) !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    margin-top: 15px !important;
+    text-align: center !important;
+}
+
+body.vendedor-fullscreen .vendedor-container p {
+    font-size: 13px !important;
+    color: rgba(255, 255, 255, 0.45) !important;
+    letter-spacing: 0.5px;
+    margin-bottom: 25px !important;
+    text-align: center !important;
+}
+
+@media (max-width: 768px) {
+    /* Reset de margens da área de conteúdo principal no celular */
+    .main-content {
+        margin-left: 0 !important;
+        padding: 16px !important;
+    }
+
+    /* Libera a rolagem nativa super fluida no modo vendedor no celular */
+    body.vendedor-fullscreen #main-content {
+        position: relative !important;
+        top: auto !important;
+        left: auto !important;
+        width: 100% !important;
+        height: auto !important;
+        min-height: 100vh !important;
+        overflow-y: visible !important;
+        padding: 16px 12px 100px !important; /* Espaço inferior confortável para rolar */
+        display: block !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+
+    body.vendedor-fullscreen .vendedor-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 10px 0px 40px !important;
+        margin: 0 !important;
+    }
+
+    /* Menu lateral (Sidebar) */
+    .sidebar {
+        background: rgba(13, 18, 22, 0.98) !important;
+        backdrop-filter: blur(20px) !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+        width: 270px !important;
+        box-shadow: 10px 0 40px rgba(0, 0, 0, 0.8) !important;
+    }
+
+    /* Grid do Vendedor: 2 colunas simétricas no formato vertical */
+    .vendedor-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 14px !important;
+        padding: 10px 0 !important;
+        width: 100% !important;
+        margin: 0 auto !important;
+    }
+
+    /* Card do Vendedor: Design Quadrado Premium, ideal para toque vertical */
+    .vendedor-grid .reg-card {
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%) !important;
+        backdrop-filter: blur(20px) !important;
+        -webkit-backdrop-filter: blur(20px) !important;
+        border: 1px solid rgba(255, 255, 255, 0.06) !important;
+        border-radius: 20px !important;
+        aspect-ratio: 1.12 / 1 !important;
+        width: 100% !important;
+        height: auto !important;
+        min-height: 120px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 10px !important;
+        padding: 16px 10px !important;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255,255,255,0.05) !important;
+        position: relative !important;
+        overflow: hidden !important;
+        animation: cardEntrance 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+
+    /* Animação em cascata dos cards */
+    .vendedor-grid .reg-card:nth-child(1) { animation-delay: 0.05s; }
+    .vendedor-grid .reg-card:nth-child(2) { animation-delay: 0.1s; }
+    .vendedor-grid .reg-card:nth-child(3) { animation-delay: 0.15s; }
+    .vendedor-grid .reg-card:nth-child(4) { animation-delay: 0.2s; }
+    .vendedor-grid .reg-card:nth-child(5) { animation-delay: 0.25s; }
+    .vendedor-grid .reg-card:nth-child(6) { animation-delay: 0.3s; }
+    .vendedor-grid .reg-card:nth-child(7) { animation-delay: 0.35s; }
+    .vendedor-grid .reg-card:nth-child(8) { animation-delay: 0.4s; }
+
+    @keyframes cardEntrance {
+        from { opacity: 0; transform: translateY(20px) scale(0.95); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* Active State (Feedback tátil por toque no celular) */
+    .vendedor-grid .reg-card:active {
+        transform: scale(0.94) !important;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 100%) !important;
+        border-color: rgba(255,255,255,0.15) !important;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6) !important;
+    }
+
+    /* Ícones maiores e destacados */
+    .vendedor-grid .reg-card .reg-card-icon {
+        font-size: 34px !important;
+        margin-bottom: 0 !important;
+        position: relative;
+        z-index: 1;
+        display: block !important;
+    }
+
+    /* Título do Botão no Mobile */
+    .vendedor-grid .reg-card .reg-card-title {
+        font-family: 'Space Grotesk', sans-serif !important;
+        font-size: 14px !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.5px !important;
+        margin: 0 !important;
+        position: relative;
+        z-index: 1;
+        display: block !important;
+        text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+    }
+
+    /* Descrição menor no Mobile */
+    .vendedor-grid .reg-card .vendedor-btn-desc {
+        font-size: 10px !important;
+        color: rgba(255, 255, 255, 0.4) !important;
+        margin: 0 !important;
+        position: relative;
+        z-index: 1;
+        display: block !important;
+    }
+
+    /* Bordas coloridas discretas exclusivas para cada botão */
+    .vendedor-grid .reg-card[onclick*="Vender"] { border-left: 3px solid #50C878 !important; color: #50C878; }
+    .vendedor-grid .reg-card[onclick*="Troca"] { border-left: 3px solid #ec4899 !important; color: #ec4899; }
+    .vendedor-grid .reg-card[onclick*="Conserto"] { border-left: 3px solid #3b82f6 !important; color: #3b82f6; }
+    .vendedor-grid .reg-card[onclick*="Pelicula"] { border-left: 3px solid #a855f7 !important; color: #a855f7; }
+    .vendedor-grid .reg-card[onclick*="Parcela"] { border-left: 3px solid #FFD700 !important; color: #FFD700; }
+    .vendedor-grid .reg-card[onclick*="ConsertosPendentes"] { border-left: 3px solid #f97316 !important; color: #f97316; }
+    .vendedor-grid .reg-card.acessorios-card {
+        border-left: 3px solid #06b6d4 !important;
+        color: #06b6d4;
+        background: rgba(255, 255, 255, 0.02) !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.06) !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255,255,255,0.02) !important;
+    }
+    .vendedor-grid .reg-card[onclick*="Simulador"] { border-left: 3px solid #F59E0B !important; color: #F59E0B; }
+
+    /* Ajuste de Botões de Ação do Footer Vendedor */
+    .vendedor-footer {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 8px !important;
+        margin-top: 25px !important;
+    }
+    
+    .vendedor-footer .btn {
+        width: 100% !important;
+        padding: 14px !important;
+        font-size: 15px !important;
+        border-radius: 12px !important;
+    }
+
+    /* 2. Bento Grid do Dashboard Geral */
+    .quick-cards {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 10px !important;
+    }
+
+    .dash-card {
+        padding: 14px 10px !important;
+        border-radius: 12px !important;
+    }
+
+    .dash-card-value {
+        font-size: 20px !important;
+        word-break: break-all !important;
+    }
+
+    .dash-card-label {
+        font-size: 10px !important;
+    }
+
+    /* 3. Modais no Celular (Preenchimento Total) */
+    .modal-overlay {
+        padding: 8px !important;
+    }
+
+    .modal-content {
+        background: rgba(10, 12, 18, 0.94) !important;
+        backdrop-filter: blur(28px) !important;
+        -webkit-backdrop-filter: blur(28px) !important;
+        max-width: 98% !important;
+        max-height: 95vh !important;
+        border-radius: 24px !important;
+        border: 1px solid rgba(255, 215, 0, 0.2) !important;
+        box-shadow: 0 25px 80px rgba(0, 0, 0, 0.95), 0 0 40px rgba(255, 215, 0, 0.05) !important;
+    }
+
+    .modal-header {
+        background: transparent !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+        padding: 14px 16px !important;
+    }
+
+    .modal-body {
+        padding: 16px 12px !important;
+    }
+
+    /* Inputs dos Formulários mais confortáveis para touch */
+    .form-group {
+        margin-bottom: 12px !important;
+    }
+
+    .form-input, .form-select {
+        height: 46px !important;
+        font-size: 15px !important;
+        border-radius: 10px !important;
+        background: rgba(255, 255, 255, 0.04) !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        color: #FFFFFF !important;
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.5) !important;
+        transition: all 0.2s ease !important;
+    }
+
+    .form-input:focus, .form-select:focus {
+        border-color: #FFD700 !important;
+        background: rgba(255, 255, 255, 0.05) !important;
+        box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.15) !important;
+    }
+
+    /* Garantir leitura nos textos dos formulários (Contraste Máximo) */
+    .form-label {
+        font-size: 12px !important;
+        color: #FFD700 !important;
+        margin-bottom: 6px !important;
+        font-weight: 600 !important;
+    }
+
+    /* Tabelas responsivas */
+    .priority-table table {
+        font-size: 11px !important;
+    }
+
+    .priority-table th, .priority-table td {
+        padding: 8px 6px !important;
+    }
+
+    /* Ajustar cards de produto no mobile */
+    .product-card {
+        padding: 12px !important;
+        margin-bottom: 10px !important;
+    }
+}
+
+/* --- ANIMACAO CYBERPUNK DA BARRA DE META ILANNA --- */
+@keyframes barraProgressoGlow {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+.barra-meta-ilanna {
+    background: linear-gradient(90deg, #ec4899, #8b5cf6, #3b82f6, #00d97e) !important;
+    background-size: 300% 300% !important;
+    animation: barraProgressoGlow 3s ease infinite !important;
+    position: relative !important;
+    overflow: hidden !important;
+}
+.barra-meta-ilanna::after {
+    content: '' !important;
+    position: absolute !important;
+    top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent) !important;
+    animation: barraCorrer 1.8s infinite linear !important;
+}
+@keyframes barraCorrer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+/* === RESPONSIVO TOASTS E NOTIFICACOES MOBILE === */
+@media (max-width: 768px) {
+    .toast-container {
+        top: 16px !important;
+        bottom: auto !important;
+        right: 16px !important;
+        left: 16px !important;
+        align-items: center !important;
+        width: calc(100% - 32px) !important;
+    }
+    .toast {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        transform: translateY(-50px) scale(0.95) !important;
+        opacity: 0 !important;
+        margin-bottom: 8px !important;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5) !important;
+        transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease !important;
+    }
+    .toast.show {
+        transform: translateY(0) scale(1) !important;
+        opacity: 1 !important;
+    }
+}
+
+/* === TELA DE BLOQUEIO CYBERPUNK (LOCK SCREEN) === */
+.lock-screen-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: #060814 !important;
+    background-image: radial-gradient(circle at 50% 50%, #150f30 0%, #060814 100%) !important;
+    z-index: 1000000 !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Space Grotesk', sans-serif !important;
+    color: #fff !important;
+    user-select: none !important;
+}
+.lock-screen-container {
+    width: 320px;
+    text-align: center;
+    animation: lockFadeIn 0.5s ease-out;
+}
+@keyframes lockFadeIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+.lock-title {
+    font-size: 20px !important;
+    font-weight: 800 !important;
+    letter-spacing: 2px !important;
+    color: var(--accent-purple) !important;
+    text-transform: uppercase !important;
+    margin-bottom: 8px !important;
+    text-shadow: 0 0 10px rgba(168,85,247,0.5) !important;
+}
+.lock-subtitle {
+    font-size: 11px !important;
+    color: var(--text-muted) !important;
+    letter-spacing: 1px !important;
+    margin-bottom: 24px !important;
+    text-transform: uppercase !important;
+}
+.lock-dots-container {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 32px;
+}
+.lock-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    transition: all 0.2s ease;
+}
+.lock-dot.filled {
+    background: var(--accent-purple) !important;
+    border-color: var(--accent-purple) !important;
+    box-shadow: 0 0 10px var(--accent-purple), 0 0 20px var(--accent-purple) !important;
+    transform: scale(1.2) !important;
+}
+.lock-keyboard {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+.lock-key {
+    background: rgba(255, 255, 255, 0.02) !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    color: #fff !important;
+    font-size: 24px !important;
+    font-weight: 700 !important;
+    width: 68px !important;
+    height: 68px !important;
+    border-radius: 50% !important;
+    cursor: pointer !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 auto !important;
+    transition: all 0.15s ease !important;
+    outline: none !important;
+}
+.lock-key:active {
+    background: rgba(168, 85, 247, 0.2) !important;
+    border-color: var(--accent-purple) !important;
+    box-shadow: 0 0 15px rgba(168, 85, 247, 0.4) !important;
+    transform: scale(0.9) !important;
+}
+.lock-key.action-key {
+    font-size: 14px !important;
+    font-weight: 800 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 1px !important;
+}
+.lock-key.delete {
+    color: var(--accent-red) !important;
+    border-color: rgba(230, 55, 87, 0.1) !important;
+}
+.lock-key.enter {
+    color: var(--accent-green) !important;
+    border-color: rgba(0, 217, 126, 0.1) !important;
+}
+.lock-shake {
+    animation: lockShakeAnimation 0.4s ease !important;
+}
+@keyframes lockShakeAnimation {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-10px); }
+    40%, 80% { transform: translateX(10px); }
+}

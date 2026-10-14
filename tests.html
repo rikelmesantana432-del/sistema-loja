@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StrategyOS 3.0 — Suíte de Testes Automatizados</title>
+    <!-- Fontes Premium -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-color: #060809;
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-color: #E7EFEA;
+            --text-dim: #8FA79B;
+            --neon-green: #00FFA3;
+            --neon-red: #FF5A6E;
+            --neon-cyan: #00E0C0;
+            --neon-gold: #FFD700;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            padding: 40px 20px;
+            overflow-x: hidden;
+            background-image: radial-gradient(circle at 50% 0%, rgba(0, 255, 163, 0.05), transparent 50%);
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 30px;
+        }
+
+        h1 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 36px;
+            font-weight: 700;
+            background: linear-gradient(90deg, var(--neon-cyan), var(--neon-green));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-dim);
+            font-size: 14px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .stat-val {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--neon-gold);
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-dim);
+            text-transform: uppercase;
+        }
+
+        .test-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .test-item {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.2s ease;
+        }
+
+        .test-item:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .test-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .test-name {
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        .test-desc {
+            font-size: 12px;
+            color: var(--text-dim);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .test-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 6px;
+            text-transform: uppercase;
+        }
+
+        .badge-pass {
+            background: rgba(0, 255, 163, 0.1);
+            color: var(--neon-green);
+            border: 1px solid rgba(0, 255, 163, 0.2);
+            box-shadow: 0 0 10px rgba(0, 255, 163, 0.05);
+        }
+
+        .badge-fail {
+            background: rgba(255, 90, 110, 0.1);
+            color: var(--neon-red);
+            border: 1px solid rgba(255, 90, 110, 0.2);
+            box-shadow: 0 0 10px rgba(255, 90, 110, 0.05);
+        }
+
+        .console-box {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: #A9B2C3;
+            margin-top: 40px;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+
+        .console-box h4 {
+            color: var(--neon-cyan);
+            margin-bottom: 10px;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 14px;
+        }
+    </style>
+
+    <!-- CARREGAR SCRIPTS DO SISTEMA (Mesma ordem do index.html) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script src="js/backup-data.js"></script>
+    <script src="js/data.js"></script>
+    <script src="js/calculators.js"></script>
+    <script src="js/ui.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>StrategyOS Test Suite</h1>
+            <div class="subtitle">Verificação de Integridade de Dados & Algoritmos</div>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-val" id="stat-total">0</div>
+                <div class="stat-label">Total Testes</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-val" id="stat-passed" style="color: var(--neon-green);">0</div>
+                <div class="stat-label">Passaram</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-val" id="stat-failed" style="color: var(--neon-red);">0</div>
+                <div class="stat-label">Falharam</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-val" id="stat-rate" style="color: var(--neon-cyan);">0%</div>
+                <div class="stat-label">Sucesso</div>
+            </div>
+        </div>
+
+        <div class="test-list" id="test-list-container">
+            <!-- Testes injetados dinamicamente -->
+        </div>
+
+        <div class="console-box">
+            <h4>⚙️ LOG DE EXECUÇÃO</h4>
+            <div id="console-logs"></div>
+        </div>
+    </div>
+
+    <script>
+        const logs = [];
+        function log(msg) {
+            logs.push(msg);
+            document.getElementById('console-logs').innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+        }
+
+        const tests = [];
+        function assert(name, desc, condition) {
+            const passed = !!condition;
+            tests.push({ name, desc, passed });
+            log(`${passed ? '🟢 PASS' : '🔴 FAIL'}: ${name} - ${desc}`);
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            log('Iniciando suíte de testes automatizados...');
+            
+            try {
+                // 1. Verificar se a classe DataManager e o objeto global foram inicializados
+                assert('DataManager Inicialização', 'Verifica se dataManager está definido globalmente', typeof dataManager !== 'undefined');
+                assert('DataManager Classe', 'Verifica se DataManager é uma classe funcional', typeof DataManager !== 'undefined');
+
+                // 2. Verificar o carregamento dos dados e merge correto
+                const data = dataManager.data;
+                assert('Dados Carregados', 'Verifica se dataManager.data existe e é um objeto', typeof data === 'object' && data !== null);
+                assert('Versão do Sistema', 'Verifica se a versão dos dados é 3.1.0', data.versao === '3.1.0');
+                
+                // 3. Verificar chaves obrigatórias herdadas do backup
+                assert('Caixa Secundário', 'Verifica se caixaSecundario foi integrado ao financeiro', data.financeiro && 'caixaSecundario' in data.financeiro);
+                assert('Tabela Encomendas', 'Verifica se encomendas está presente', Array.isArray(data.encomendas));
+                assert('Bloco de Notas', 'Verifica se blocoNotas foi inicializado', typeof data.blocoNotas === 'object');
+                assert('Módulo Fidelidade', 'Verifica se fidelidade foi inicializado', typeof data.fidelidade === 'object');
+                assert('Movimentações Caixa', 'Verifica se movimentacoesCaixa está definido', Array.isArray(data.movimentacoesCaixa));
+
+                // 4. Verificar integridade dos dados reais do Backup
+                assert('Array Clientes', 'Verifica se carregou os 164 clientes do backup', data.clientes.length === 164);
+                assert('Array Celulares', 'Verifica se carregou os 29 celulares do backup', data.estoqueCelulares.length === 29);
+                assert('Array Acessórios', 'Verifica se carregou os 33 acessórios do backup', data.estoqueAcessorios.length === 33);
+                assert('Ordens de Serviço', 'Verifica se carregou as 28 ordens de serviço', data.assistencia.ordensServico.length === 28);
+                assert('Histórico de Vendas', 'Verifica se carregou as 215 vendas do backup', data.historico.vendas.length === 215);
+
+                // 5. Verificar métodos de negócio
+                const celularesAtivos = dataManager.getEstoqueCelulares();
+                assert('getEstoqueCelulares()', 'Filtra corretamente e retorna array', Array.isArray(celularesAtivos));
+                
+                const valorEstoque = dataManager.calcularValorEstoqueCelulares();
+                assert('calcularValorEstoqueCelulares()', 'Retorna o valor financeiro do estoque', typeof valorEstoque === 'number' && valorEstoque >= 0);
+                
+                const metaProgresso = dataManager.calcularProgressoMeta();
+                assert('calcularProgressoMeta()', 'Calcula progresso da viagem ao Paraguai', metaProgresso && typeof metaProgresso.pct === 'number');
+
+                // 6. Verificar o simulador de taxas (Fórmula Markup Inverso corrigida)
+                const taxas = data.taxasCartao;
+                assert('Tabela de Taxas', 'Verifica se tabela de taxas Tuoli existe', typeof taxas === 'object' && taxas !== null);
+                
+                // Testar cálculo de markup inverso de 12x
+                const valorOriginal = 1000;
+                const taxaPct = taxas['12x'] || 12.01;
+                // Fórmula corrigida
+                const valorCliente = valorOriginal / (1 - taxaPct / 100);
+                const recebimentoLiquido = valorCliente - (valorCliente * taxaPct / 100);
+                // Deve dar exatamente 1000 com margem de tolerância infinitesimal
+                const erro = Math.abs(recebimentoLiquido - valorOriginal);
+                assert('Markup Inverso do Simulador', 'Garante recebimento líquido de 100% sem perda de centavos', erro < 0.001);
+
+                // 7. Modo Treino
+                assert('isModoTreino()', 'Retorna o estado do modo de treino', typeof dataManager.isModoTreino() === 'boolean');
+                dataManager.ativarModoTreino();
+                assert('ativarModoTreino()', 'Ativa modo de simulação com backup temporário', dataManager.isModoTreino() === true);
+                dataManager.desativarModoTreino();
+                assert('desativarModoTreino()', 'Desativa modo treino e restaura dados', dataManager.isModoTreino() === false);
+
+                // 8. Sincronização Financeira, Fundo de Custo (CMV) e Divisão 40/60 (v3.4.0)
+                assert('Fundo de Custo de Estoque', 'Verifica se fundoCustoEstoque existe', typeof dataManager.data.fundoCustoEstoque === 'object');
+                assert('Divisão de Lucro (40/60)', 'Verifica se divisaoLucro está configurado com 40% Loja / 60% Pai', dataManager.data.divisaoLucro && dataManager.data.divisaoLucro.porcentagemLoja === 40 && dataManager.data.divisaoLucro.porcentagemPai === 60);
+
+                // Testar lançamento financeiro simulado
+                const acumuladoAnteriorLoja = dataManager.data.divisaoLucro.acumuladoLoja40 || 0;
+                const acumuladoAnteriorPai = dataManager.data.divisaoLucro.acumuladoPai60 || 0;
+                const caixaTerciarioAnterior = dataManager.data.financeiro.caixaTerciario || 0;
+                dataManager._registrarSincronizacaoFinanceira({
+                    tipo: 'venda_teste',
+                    produto: 'Capinha Teste',
+                    valorVenda: 100,
+                    custo: 20,
+                    caixaDestino: 'caixaAcessorios',
+                    cliente: 'Cliente Teste'
+                });
+                // Lucro líquido = 100 - 20 = 80 -> 40% = 32 para Loja, 60% = 48 para Pai
+                const diffLoja = dataManager.data.divisaoLucro.acumuladoLoja40 - acumuladoAnteriorLoja;
+                const diffPai = dataManager.data.divisaoLucro.acumuladoPai60 - acumuladoAnteriorPai;
+                const diffTerciario = dataManager.data.financeiro.caixaTerciario - caixaTerciarioAnterior;
+                assert('Rateio 40% Loja', 'Verifica se a Loja recebeu exatamente R$ 32,00 do lucro de R$ 80,00', Math.abs(diffLoja - 32) < 0.01);
+                assert('Rateio 60% Pai', 'Verifica se o Pai recebeu exatamente R$ 48,00 do lucro de R$ 80,00', Math.abs(diffPai - 48) < 0.01);
+                assert('Crédito Automático no Caixa Terciário (Pai)', 'Verifica se o Caixa Terciário recebeu os 60% do pai automaticamente', Math.abs(diffTerciario - 48) < 0.01);
+
+                // 9. Novas Funcionalidades v3.5.0: Produtos Sem Custo, Trava de Sincronização e Senha Admin
+                const semCusto = dataManager.getProdutosSemCusto();
+                assert('Detecção de Produtos Sem Custo', 'Verifica se getProdutosSemCusto() retorna objeto válido', typeof semCusto === 'object' && typeof semCusto.total === 'number');
+
+                dataManager.saveData();
+                assert('Trava de Persistência Local (_ultimoSaveLocal)', 'Garante que o timestamp local de gravação é atualizado', typeof dataManager.data._ultimoSaveLocal === 'number' && dataManager.data._ultimoSaveLocal > 0);
+                assert('Backup no LocalStorage (strategyos_v3_backup)', 'Garante que a cópia de segurança secundária foi criada', localStorage.getItem('strategyos_v3_backup') !== null);
+
+                assert('Função pedirSenhaAdmin()', 'Verifica se a função de bloqueio do financeiro por senha existe', typeof UI.pedirSenhaAdmin === 'function');
+                assert('Função zerarDadosFinanceiros()', 'Verifica se o método de zerar saldos para início limpo existe', typeof dataManager.zerarDadosFinanceiros === 'function');
+
+            } catch (err) {
+                assert('Exceção Crítica', `Erro inesperado na execução do teste: ${err.message}`, false);
+                console.error(err);
+            }
+
+            // Renderizar resultados na tela
+            let html = '';
+            let passedCount = 0;
+            tests.forEach(t => {
+                if (t.passed) passedCount++;
+                html += `
+                    <div class="test-item">
+                        <div class="test-info">
+                            <span class="test-name">${t.name}</span>
+                            <span class="test-desc">${t.desc}</span>
+                        </div>
+                        <span class="test-badge ${t.passed ? 'badge-pass' : 'badge-fail'}">
+                            ${t.passed ? 'Passou' : 'Falhou'}
+                        </span>
+                    </div>
+                `;
+            });
+
+            document.getElementById('test-list-container').innerHTML = html;
+            
+            // Atualizar contadores
+            const total = tests.length;
+            const failed = total - passedCount;
+            const rate = total > 0 ? Math.round((passedCount / total) * 100) : 0;
+
+            document.getElementById('stat-total').textContent = total;
+            document.getElementById('stat-passed').textContent = passedCount;
+            document.getElementById('stat-failed').textContent = failed;
+            document.getElementById('stat-rate').textContent = `${rate}%`;
+
+            log(`Suíte de testes concluída: ${passedCount} passados, ${failed} falhados de ${total} testes.`);
+        });
+    </script>
+</body>
+</html>

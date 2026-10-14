@@ -1,0 +1,377 @@
+/* ====================================
+   SPLASH SCREEN — Cesinha Acessórios
+   Animação de abertura premium
+   ==================================== */
+
+#splash {
+    position: fixed;
+    inset: 0;
+    z-index: 999999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #060912;
+    overflow: hidden;
+    /* saída suave — começa após 4.8s */
+    animation: splashSair 1.4s ease-in 4.8s forwards;
+}
+
+/* fundo vivo — glow dourado central */
+#splash::before {
+    content: '';
+    position: absolute;
+    width: 700px;
+    height: 700px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 210, 0, 0.06) 0%, transparent 70%);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    animation: glowPulse 3s ease-in-out infinite alternate;
+}
+
+@keyframes glowPulse {
+    from {
+        transform: translate(-50%, -50%) scale(0.9);
+        opacity: 0.6;
+    }
+
+    to {
+        transform: translate(-50%, -50%) scale(1.2);
+        opacity: 1;
+    }
+}
+
+/* grade de pontos */
+#splash .grade {
+    position: absolute;
+    inset: 0;
+    background-image:
+        radial-gradient(circle, rgba(255, 210, 0, 0.10) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse 65% 65% at 50% 50%, black 20%, transparent 75%);
+    -webkit-mask-image: radial-gradient(ellipse 65% 65% at 50% 50%, black 20%, transparent 75%);
+    animation: gradeFade 1.2s ease 0.1s both;
+}
+
+@keyframes gradeFade {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* cantos elegantes */
+.canto {
+    position: absolute;
+    width: 48px;
+    height: 48px;
+    opacity: 0;
+    animation: cantoEntrar 0.6s ease 0.3s forwards;
+}
+
+.canto-tl {
+    top: 28px;
+    left: 28px;
+    border-top: 1px solid rgba(255, 210, 0, 0.35);
+    border-left: 1px solid rgba(255, 210, 0, 0.35);
+}
+
+.canto-tr {
+    top: 28px;
+    right: 28px;
+    border-top: 1px solid rgba(255, 210, 0, 0.35);
+    border-right: 1px solid rgba(255, 210, 0, 0.35);
+}
+
+.canto-bl {
+    bottom: 28px;
+    left: 28px;
+    border-bottom: 1px solid rgba(255, 210, 0, 0.35);
+    border-left: 1px solid rgba(255, 210, 0, 0.35);
+}
+
+.canto-br {
+    bottom: 28px;
+    right: 28px;
+    border-bottom: 1px solid rgba(255, 210, 0, 0.35);
+    border-right: 1px solid rgba(255, 210, 0, 0.35);
+}
+
+@keyframes cantoEntrar {
+    to {
+        opacity: 1;
+    }
+}
+
+/* partículas */
+.splash-particulas {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.splash-p {
+    position: absolute;
+    border-radius: 50%;
+    background: #FFD700;
+    animation: splashSubir linear infinite;
+    box-shadow: 0 0 4px rgba(255, 210, 0, 0.5);
+}
+
+@keyframes splashSubir {
+    0% {
+        transform: translateY(0) scale(1);
+        opacity: 0;
+    }
+
+    10% {
+        opacity: 0.8;
+    }
+
+    90% {
+        opacity: 0.3;
+    }
+
+    100% {
+        transform: translateY(-110vh) scale(0.2);
+        opacity: 0;
+    }
+}
+
+/* ---- conteúdo ---- */
+.splash-corpo {
+    position: relative;
+    z-index: 2;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* linha superior */
+.linha-topo {
+    width: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 210, 0, 0.6), transparent);
+    margin-bottom: 40px;
+    animation: linhaAbrir 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.5s forwards;
+}
+
+@keyframes linhaAbrir {
+    to {
+        width: 220px;
+    }
+}
+
+/* ícone */
+.splash-icone {
+    font-size: 56px;
+    opacity: 0;
+    transform: scale(0.4) rotate(-15deg);
+    animation: iconePop 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.5) 1s forwards;
+    filter: drop-shadow(0 0 24px rgba(255, 210, 0, 0.55));
+    margin-bottom: 24px;
+}
+
+@keyframes iconePop {
+    to {
+        opacity: 1;
+        transform: scale(1) rotate(0deg);
+    }
+}
+
+/* nome */
+.splash-nome {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 500;
+    font-size: clamp(38px, 6vw, 68px);
+    letter-spacing: 8px;
+    text-transform: uppercase;
+    color: #FFD700;
+    text-shadow: 0 0 50px rgba(255, 210, 0, 0.35), 0 0 100px rgba(255, 210, 0, 0.12);
+    opacity: 0;
+    animation: nomeReveal 1s cubic-bezier(0.16, 1, 0.3, 1) 1.3s forwards;
+}
+
+@keyframes nomeReveal {
+    from {
+        opacity: 0;
+        transform: translateY(24px);
+        letter-spacing: 22px;
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+        letter-spacing: 8px;
+    }
+}
+
+/* cidade */
+.splash-cidade {
+    font-family: 'Inter', sans-serif;
+    font-weight: 200;
+    font-size: 10px;
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    color: rgba(255, 210, 0, 0.45);
+    margin-top: 10px;
+    opacity: 0;
+    animation: splashFadeUp 0.7s ease 1.9s forwards;
+}
+
+/* divisor */
+.splash-divisor {
+    width: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 210, 0, 0.25), transparent);
+    margin: 36px 0;
+    animation: linhaAbrir2 0.8s ease 2.2s forwards;
+}
+
+@keyframes linhaAbrir2 {
+    to {
+        width: 300px;
+    }
+}
+
+/* mensagem */
+.splash-msg {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-weight: 300;
+    font-size: clamp(22px, 3vw, 34px);
+    color: rgba(255, 255, 255, 0.88);
+    letter-spacing: 0.5px;
+    line-height: 1.5;
+    opacity: 0;
+    animation: splashFadeUp 0.9s ease 2.5s forwards;
+}
+
+.splash-msg em {
+    font-style: normal;
+    color: #FFD700;
+    font-weight: 500;
+}
+
+/* cursor piscante */
+.splash-cursor {
+    display: inline-block;
+    width: 2px;
+    height: 0.85em;
+    background: #FFD700;
+    margin-left: 3px;
+    vertical-align: middle;
+    opacity: 0;
+    animation:
+        splashFadeUp 0.1s ease 3.3s forwards,
+        splashPiscar 0.55s step-end 3.3s 4;
+}
+
+@keyframes splashPiscar {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0;
+    }
+}
+
+/* resposta do sistema */
+.splash-resposta {
+    font-family: 'Inter', sans-serif;
+    font-weight: 300;
+    font-size: 11px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: rgba(255, 210, 0, 0.6);
+    margin-top: 32px;
+    opacity: 0;
+    animation: splashFadeUp 0.6s ease 3.7s forwards;
+}
+
+/* barra de progresso */
+.splash-bar-wrap {
+    width: 180px;
+    height: 1px;
+    background: rgba(255, 210, 0, 0.1);
+    border-radius: 1px;
+    margin-top: 14px;
+    overflow: hidden;
+    opacity: 0;
+    animation: splashFadeUp 0.4s ease 3.8s forwards;
+}
+
+.splash-bar-fill {
+    height: 100%;
+    width: 0;
+    background: linear-gradient(90deg, #B8860B, #FFD700, #FFA500);
+    box-shadow: 0 0 8px rgba(255, 210, 0, 0.7);
+    animation: barraEncher 0.65s cubic-bezier(0.16, 1, 0.3, 1) 3.9s forwards;
+}
+
+@keyframes barraEncher {
+    to {
+        width: 100%;
+    }
+}
+
+/* linha inferior */
+.linha-base {
+    width: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 210, 0, 0.6), transparent);
+    margin-top: 40px;
+    animation: linhaAbrir 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.5s forwards;
+}
+
+/* animação auxiliar */
+@keyframes splashFadeUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* SAÍDA ÉPICA — toda a tela sobe e desaparece com blur */
+@keyframes splashSair {
+    0% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        filter: blur(0px);
+    }
+
+    30% {
+        opacity: 0.9;
+        transform: translateY(-10px) scale(1.01);
+        filter: blur(0px);
+    }
+
+    70% {
+        opacity: 0.4;
+        transform: translateY(-35px) scale(1.02);
+        filter: blur(3px);
+    }
+
+    100% {
+        opacity: 0;
+        transform: translateY(-70px) scale(1.03);
+        filter: blur(10px);
+        pointer-events: none;
+        visibility: hidden;
+    }
+}
