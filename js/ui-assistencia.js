@@ -408,7 +408,10 @@ UI.renderAssistencia = function () {
                 <h2 style="margin:0;font-size:26px;color:#FFD700;font-weight:900;">🔧 ASSISTÊNCIA TÉCNICA & BUSCA DE MANUTENÇÕES</h2>
                 <p style="font-size:13px;color:var(--text-muted);margin:4px 0 0;">Pesquise por cliente, modelo do celular, serviço ou nº da OS</p>
             </div>
-            <button class="btn btn-success btn-lg" onclick="UI.modalNovaOS()">+ Nova OS</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="btn btn-warning btn-lg" onclick="UI.modalTabelaPrecosConserto()" style="background:#f59e0b;color:#000;font-weight:700;border:none;">📋 Tabela de Peças & Custos</button>
+                <button class="btn btn-success btn-lg" onclick="UI.modalNovaOS()">+ Nova OS</button>
+            </div>
         </div>
 
         <!-- BARRA DE BUSCA INTELIGENTE E FILTROS IGUAL AO MÓDULO VENDEDOR -->
