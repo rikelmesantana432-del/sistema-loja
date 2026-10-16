@@ -95,19 +95,22 @@ UI.verHistoricoFechamentos = function () {
 // === ADICIONAR DINHEIRO ===
 UI.adicionarDinheiro = function () {
     const f = dataManager.getFinanceiro();
-    UI.openModal('💰 Adicionar Dinheiro', `
+    UI.openModal('💰 Adicionar Dinheiro / Suprimento', `
         <div style="padding:12px">
             <label class="form-label">Caixa de destino:</label>
             <select class="form-input" id="add-caixa" style="font-size:16px;padding:10px">
-                <option value="caixaPrincipal">🏪 Caixa Principal (Balcão / Loja) (${UI.R(f.caixaPrincipal || f.caixaSecundario || 0)})</option>
+                <option value="caixaSecundario">💵 Caixa Secundário (Gaveta Física / Dinheiro) (${UI.R(f.caixaSecundario || 0)})</option>
+                <option value="caixaPrincipal">🏦 Caixa Principal (Conta / PIX / Cartão) (${UI.R(f.caixaPrincipal || 0)})</option>
+                <option value="caixaTerciario">👨‍🦳 Caixa Terciário (Pai) (${UI.R(f.caixaTerciario || 0)})</option>
                 <option value="caixaFogos">🎇 Caixa de Fogos de Artifício (${UI.R(f.caixaFogos || 0)})</option>
                 <option value="caixaAssistencia">🔧 Caixa Assistência Técnica (${UI.R(f.caixaAssistencia || 0)})</option>
                 <option value="reservaEmergencia">🛡️ Reserva de Emergência (${UI.R(f.reservaEmergencia || 0)})</option>
             </select>
             <label class="form-label" style="margin-top:12px">Valor (R$):</label>
-            <input class="form-input" id="add-valor" type="number" style="font-size:20px;text-align:center;font-weight:700;padding:12px" placeholder="0,00">
+            <input class="form-input" id="add-valor" type="number" step="0.01" style="font-size:20px;text-align:center;font-weight:700;padding:12px" placeholder="0,00">
             <label class="form-label" style="margin-top:12px">Motivo:</label>
             <select class="form-input" id="add-motivo" style="font-size:16px;padding:10px">
+                <option value="Suprimento / Troco">Suprimento / Troco de Gaveta</option>
                 <option value="Venda manual">Venda manual</option>
                 <option value="Aporte pessoal">Aporte pessoal</option>
                 <option value="Devolução">Devolução</option>
@@ -125,12 +128,14 @@ UI._confirmarAdicao = function () {
     const motivo = document.getElementById('add-motivo').value;
     const obs = document.getElementById('add-obs')?.value || '';
     if (!valor || valor <= 0) return UI.toast('Digite um valor válido', 'error');
+    if (dataManager.data.financeiro[caixa] === undefined) dataManager.data.financeiro[caixa] = 0;
     dataManager.data.financeiro[caixa] += valor;
     if (!dataManager.data.movimentacoesCaixa) dataManager.data.movimentacoesCaixa = [];
-    dataManager.data.movimentacoesCaixa.push({ tipo: 'entrada', caixa, valor, motivo, obs, data: new Date().toISOString() });
+    const tipoMov = motivo.toLowerCase().includes('suprimento') ? 'suprimento' : 'entrada';
+    dataManager.data.movimentacoesCaixa.push({ tipo: tipoMov, caixa, valor, motivo, obs, descricao: `${motivo}${obs ? ' — ' + obs : ''}`, data: new Date().toISOString() });
     dataManager.saveData();
     UI.closeModal();
-    UI.toast(`✅ ${UI.R(valor)} adicionado ao ${caixa}`, 'success');
+    UI.toast(`✅ ${UI.R(valor)} adicionado ao caixa!`, 'success');
     UI.render();
 };
 
@@ -141,15 +146,16 @@ UI.retirarDinheiro = function () {
         <div style="padding:12px">
             <label class="form-label">Retirar de:</label>
             <select class="form-input" id="ret-caixa" style="font-size:16px;padding:10px">
-                <option value="caixaSecundario">Caixa Secundário (Balcão / Gaveta) (${UI.R(f.caixaSecundario || 0)})</option>
-                <option value="caixaTerciario">Caixa Terciário (Pai) (${UI.R(f.caixaTerciario || 0)})</option>
-                <option value="caixaAcessorios">Caixa Acessórios (${UI.R(f.caixaAcessorios)})</option>
-                <option value="caixaAssistencia">Caixa Assistência (${UI.R(f.caixaAssistencia)})</option>
-                <option value="reservaEmergencia">Reserva de Emergência (${UI.R(f.reservaEmergencia)})</option>
-                <option value="caixaPrincipal">Caixa Principal (Interno) (${UI.R(f.caixaPrincipal)})</option>
+                <option value="caixaSecundario">💵 Caixa Secundário (Balcão / Gaveta) (${UI.R(f.caixaSecundario || 0)})</option>
+                <option value="caixaPrincipal">🏦 Caixa Principal (Conta / PIX / Cartão) (${UI.R(f.caixaPrincipal || 0)})</option>
+                <option value="caixaTerciario">👨‍🦳 Caixa Terciário (Pai) (${UI.R(f.caixaTerciario || 0)})</option>
+                <option value="caixaFogos">🎇 Caixa de Fogos (${UI.R(f.caixaFogos || 0)})</option>
+                <option value="caixaAcessorios">📦 Caixa Acessórios (${UI.R(f.caixaAcessorios || 0)})</option>
+                <option value="caixaAssistencia">🔧 Caixa Assistência (${UI.R(f.caixaAssistencia || 0)})</option>
+                <option value="reservaEmergencia">🛡️ Reserva de Emergência (${UI.R(f.reservaEmergencia || 0)})</option>
             </select>
             <label class="form-label" style="margin-top:12px">Valor (R$):</label>
-            <input class="form-input" id="ret-valor" type="number" style="font-size:20px;text-align:center;font-weight:700;padding:12px" placeholder="0,00">
+            <input class="form-input" id="ret-valor" type="number" step="0.01" style="font-size:20px;text-align:center;font-weight:700;padding:12px" placeholder="0,00">
             <label class="form-label" style="margin-top:12px">Motivo:</label>
             <select class="form-input" id="ret-motivo" style="font-size:16px;padding:10px">
                 <option value="Compra de estoque">Compra de estoque</option>
@@ -170,10 +176,10 @@ UI._confirmarRetirada = function () {
     const motivo = document.getElementById('ret-motivo').value;
     const obs = document.getElementById('ret-obs')?.value || '';
     if (!valor || valor <= 0) return UI.toast('Digite um valor válido', 'error');
-    if (dataManager.data.financeiro[caixa] < valor) return UI.toast('Saldo insuficiente!', 'error');
+    if ((dataManager.data.financeiro[caixa] || 0) < valor) return UI.toast('Saldo insuficiente!', 'error');
     dataManager.data.financeiro[caixa] -= valor;
     if (!dataManager.data.movimentacoesCaixa) dataManager.data.movimentacoesCaixa = [];
-    dataManager.data.movimentacoesCaixa.push({ tipo: 'saida', caixa, valor, motivo, obs, data: new Date().toISOString() });
+    dataManager.data.movimentacoesCaixa.push({ tipo: 'saida', caixa, valor: -valor, motivo, obs, descricao: `RETIRADA (${motivo})${obs ? ' — ' + obs : ''}`, data: new Date().toISOString() });
     dataManager.saveData();
     UI.closeModal();
     UI.toast(`💸 ${UI.R(valor)} retirado de ${caixa}`, 'success');
@@ -182,7 +188,16 @@ UI._confirmarRetirada = function () {
 
 // === TRANSFERIR ENTRE CAIXAS ===
 UI.transferirEntreCaixas = function () {
-    const opts = `<option value="caixaSecundario">Secundário (${UI.R(f.caixaSecundario || 0)})</option><option value="caixaTerciario">Terciário (Pai) (${UI.R(f.caixaTerciario || 0)})</option><option value="caixaAcessorios">Acessórios (${UI.R(f.caixaAcessorios)})</option><option value="caixaAssistencia">Assistência (${UI.R(f.caixaAssistencia)})</option><option value="reservaEmergencia">Reserva (${UI.R(f.reservaEmergencia)})</option><option value="caixaPrincipal">Principal (Interno) (${UI.R(f.caixaPrincipal)})</option>`;
+    const f = dataManager.getFinanceiro();
+    const opts = `
+        <option value="caixaSecundario">💵 Secundário / Gaveta (${UI.R(f.caixaSecundario || 0)})</option>
+        <option value="caixaPrincipal">🏦 Principal / Conta (${UI.R(f.caixaPrincipal || 0)})</option>
+        <option value="caixaTerciario">👨‍🦳 Terciário / Pai (${UI.R(f.caixaTerciario || 0)})</option>
+        <option value="caixaFogos">🎇 Fogos (${UI.R(f.caixaFogos || 0)})</option>
+        <option value="caixaAcessorios">📦 Acessórios (${UI.R(f.caixaAcessorios || 0)})</option>
+        <option value="caixaAssistencia">🔧 Assistência (${UI.R(f.caixaAssistencia || 0)})</option>
+        <option value="reservaEmergencia">🛡️ Reserva (${UI.R(f.reservaEmergencia || 0)})</option>
+    `;
     UI.openModal('🔄 Transferir entre Caixas', `
         <div style="padding:12px">
             <label class="form-label">De (origem):</label>
@@ -190,7 +205,7 @@ UI.transferirEntreCaixas = function () {
             <label class="form-label" style="margin-top:12px">Para (destino):</label>
             <select class="form-input" id="transf-destino" style="font-size:16px;padding:10px">${opts}</select>
             <label class="form-label" style="margin-top:12px">Valor (R$):</label>
-            <input class="form-input" id="transf-valor" type="number" style="font-size:20px;text-align:center;font-weight:700;padding:12px" placeholder="0,00">
+            <input class="form-input" id="transf-valor" type="number" step="0.01" style="font-size:20px;text-align:center;font-weight:700;padding:12px" placeholder="0,00">
             <button class="btn" style="background:var(--accent-cyan);color:#fff;width:100%;margin-top:16px;font-size:18px;padding:12px" onclick="UI._confirmarTransferencia()">🔄 TRANSFERIR</button>
         </div>`);
 };
@@ -201,11 +216,20 @@ UI._confirmarTransferencia = function () {
     const valor = parseFloat(document.getElementById('transf-valor').value);
     if (!valor || valor <= 0) return UI.toast('Digite um valor válido', 'error');
     if (origem === destino) return UI.toast('Origem e destino devem ser diferentes', 'error');
-    if (dataManager.data.financeiro[origem] < valor) return UI.toast('Saldo insuficiente!', 'error');
+    if ((dataManager.data.financeiro[origem] || 0) < valor) return UI.toast('Saldo insuficiente!', 'error');
     dataManager.data.financeiro[origem] -= valor;
+    if (dataManager.data.financeiro[destino] === undefined) dataManager.data.financeiro[destino] = 0;
     dataManager.data.financeiro[destino] += valor;
     if (!dataManager.data.movimentacoesCaixa) dataManager.data.movimentacoesCaixa = [];
-    dataManager.data.movimentacoesCaixa.push({ tipo: 'transferencia', caixaOrigem: origem, caixaDestino: destino, valor, data: new Date().toISOString() });
+    dataManager.data.movimentacoesCaixa.push({
+        tipo: 'transferencia',
+        caixa: origem,
+        caixaOrigem: origem,
+        caixaDestino: destino,
+        valor,
+        descricao: `Transferência: ${origem} ➔ ${destino} (${UI.R(valor)})`,
+        data: new Date().toISOString()
+    });
     dataManager.saveData();
     UI.closeModal();
     UI.toast(`🔄 ${UI.R(valor)} transferido de ${origem} para ${destino}`, 'success');
@@ -217,13 +241,14 @@ UI.zerarCaixa = function () {
     const f = dataManager.getFinanceiro();
     UI.openModal('🗑️ Zerar Caixa', `
         <div style="padding:12px">
-            <p style="font-size:18px;color:var(--accent-red);margin-bottom:12px">⚠️ Isso vai colocar o saldo em R$ 0,00!</p>
+            <p style="font-size:18px;color:var(--accent-red);margin-bottom:12px">⚠️ Isso vai colocar o saldo do caixa selecionado em R$ 0,00!</p>
             <select class="form-input" id="zerar-caixa" style="font-size:16px;padding:10px">
-                <option value="caixaSecundario">Secundário (Balcão / Gaveta) (${UI.R(f.caixaSecundario || 0)})</option>
-                <option value="caixaTerciario">Terciário (Pai) (${UI.R(f.caixaTerciario || 0)})</option>
-                <option value="caixaAcessorios">Acessórios (${UI.R(f.caixaAcessorios)})</option>
-                <option value="caixaAssistencia">Assistência (${UI.R(f.caixaAssistencia)})</option>
-                <option value="caixaPrincipal">Principal (Interno) (${UI.R(f.caixaPrincipal)})</option>
+                <option value="caixaSecundario">💵 Secundário / Gaveta Física (${UI.R(f.caixaSecundario || 0)})</option>
+                <option value="caixaPrincipal">🏦 Principal / Conta (${UI.R(f.caixaPrincipal || 0)})</option>
+                <option value="caixaTerciario">👨‍🦳 Terciário / Pai (${UI.R(f.caixaTerciario || 0)})</option>
+                <option value="caixaFogos">🎇 Fogos (${UI.R(f.caixaFogos || 0)})</option>
+                <option value="caixaAcessorios">📦 Acessórios (${UI.R(f.caixaAcessorios || 0)})</option>
+                <option value="caixaAssistencia">🔧 Assistência (${UI.R(f.caixaAssistencia || 0)})</option>
             </select>
             <button class="btn" style="background:var(--accent-red);color:#fff;width:100%;margin-top:16px;font-size:18px;padding:12px" onclick="UI._confirmarZerar()">🗑️ CONFIRMAR ZERAR</button>
         </div>`);
@@ -231,10 +256,10 @@ UI.zerarCaixa = function () {
 
 UI._confirmarZerar = function () {
     const caixa = document.getElementById('zerar-caixa').value;
-    const valorAnterior = dataManager.data.financeiro[caixa];
+    const valorAnterior = dataManager.data.financeiro[caixa] || 0;
     dataManager.data.financeiro[caixa] = 0;
     if (!dataManager.data.movimentacoesCaixa) dataManager.data.movimentacoesCaixa = [];
-    dataManager.data.movimentacoesCaixa.push({ tipo: 'zerado', caixa, valorAnterior, data: new Date().toISOString() });
+    dataManager.data.movimentacoesCaixa.push({ tipo: 'zerado', caixa, valor: 0, valorAnterior, descricao: `Caixa ${caixa} zerado (Saldo anterior: ${UI.R(valorAnterior)})`, data: new Date().toISOString() });
     dataManager.saveData();
     UI.closeModal();
     UI.toast(`🗑️ ${caixa} zerado (era ${UI.R(valorAnterior)})`, 'success');
@@ -244,33 +269,66 @@ UI._confirmarZerar = function () {
 // === HISTÓRICO DE MOVIMENTAÇÕES ===
 UI.verHistoricoMovimentacoes = function () {
     const movs = dataManager.getTodosMovimentacoesHistorico();
-    const nomes = { caixaPrincipal: 'Principal', caixaAcessorios: 'Acessórios', caixaAssistencia: 'Assistência', caixaSecundario: 'Secundário', caixaTerciario: 'Terciário (Pai)', reservaEmergencia: 'Reserva' };
+    const nomes = {
+        caixaPrincipal: '🏦 Principal (PIX/Cartão)',
+        caixaAcessorios: '📦 Acessórios',
+        caixaAssistencia: '🔧 Assistência',
+        caixaSecundario: '💵 Gaveta (Dinheiro)',
+        caixaTerciario: '👨‍🦳 Terciário (Pai)',
+        caixaFogos: '🎇 Fogos',
+        reservaEmergencia: '🛡️ Reserva',
+        fundoCustoEstoque: '📦 Fundo Reposição'
+    };
+    const hojeLocalStr = dataManager.hojeLocal();
     
     let html = `
     <div style="padding:10px;">
-        <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border-color);border-radius:12px;padding:14px;margin-bottom:16px;">
-            <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:10px;margin-bottom:10px;">
+        <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border-color);border-radius:12px;padding:14px;margin-bottom:14px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(170px, 1fr));gap:10px;margin-bottom:10px;">
                 <div>
-                    <label class="form-label" style="font-size:11px;color:var(--text-muted);">🔎 Pesquisar (Produto, Cliente ou Descrição):</label>
-                    <input class="form-input" id="hist-busca-input" placeholder="Digite para filtrar instantaneamente..." oninput="UI._filtrarModalHistorico()" style="font-size:14px;padding:8px;">
+                    <label class="form-label" style="font-size:11px;color:var(--text-muted);">🔎 Pesquisar (Produto, Cliente, OS):</label>
+                    <input class="form-input" id="hist-busca-input" placeholder="Digite para filtrar..." oninput="UI._filtrarModalHistorico()" style="font-size:14px;padding:8px;">
                 </div>
                 <div>
-                    <label class="form-label" style="font-size:11px;color:var(--text-muted);">🗓️ Filtrar por Data Específica:</label>
+                    <label class="form-label" style="font-size:11px;color:var(--text-muted);">🗓️ Data Específica:</label>
                     <input class="form-input" id="hist-data-input" type="date" onchange="UI._filtrarModalHistorico()" style="font-size:14px;padding:8px;">
+                </div>
+                <div>
+                    <label class="form-label" style="font-size:11px;color:var(--text-muted);">🏷️ Tipo de Registro:</label>
+                    <select class="form-input" id="hist-tipo-select" onchange="UI._filtrarModalHistorico()" style="font-size:14px;padding:8px;">
+                        <option value="todos">Todos os Registros</option>
+                        <option value="vendas">🟢 Somente Vendas & OS</option>
+                        <option value="despesas">🔴 Somente Despesas & Saídas</option>
+                        <option value="transferencias">🔄 Sangrias, Transferências & Fechamentos</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label" style="font-size:11px;color:var(--text-muted);">🏦 Filtrar por Caixa:</label>
+                    <select class="form-input" id="hist-caixa-select" onchange="UI._filtrarModalHistorico()" style="font-size:14px;padding:8px;">
+                        <option value="todos">Todos os Caixas</option>
+                        <option value="caixaSecundario">💵 Gaveta Física (Dinheiro)</option>
+                        <option value="caixaPrincipal">🏦 Conta Principal (PIX/Cartão)</option>
+                        <option value="caixaTerciario">👨‍🦳 Caixa Terciário (Pai)</option>
+                        <option value="caixaFogos">🎇 Caixa de Fogos</option>
+                    </select>
                 </div>
             </div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
-                <span style="font-size:11px;color:var(--text-muted);font-weight:700;">Atalhos:</span>
-                <button class="btn btn-sm btn-ghost" style="font-size:11px;padding:4px 8px;" onclick="document.getElementById('hist-data-input').value=new Date().toISOString().substring(0,10);UI._filtrarModalHistorico();">🗓️ Hoje</button>
-                <button class="btn btn-sm btn-ghost" style="font-size:11px;padding:4px 8px;" onclick="document.getElementById('hist-data-input').value='';document.getElementById('hist-busca-input').value='';UI._filtrarModalHistorico();">🔍 Exibir Todo o Histórico (${movs.length})</button>
+                <span style="font-size:11px;color:var(--text-muted);font-weight:700;">Atalhos Rápidos:</span>
+                <button class="btn btn-sm btn-ghost" style="font-size:11px;padding:4px 8px;" onclick="document.getElementById('hist-data-input').value='${hojeLocalStr}';UI._filtrarModalHistorico();">🗓️ Hoje (${hojeLocalStr.split('-').reverse().join('/')})</button>
+                <button class="btn btn-sm btn-ghost" style="font-size:11px;padding:4px 8px;" onclick="document.getElementById('hist-tipo-select').value='vendas';UI._filtrarModalHistorico();">💰 Só Vendas</button>
+                <button class="btn btn-sm btn-ghost" style="font-size:11px;padding:4px 8px;" onclick="document.getElementById('hist-tipo-select').value='despesas';UI._filtrarModalHistorico();">💸 Só Despesas</button>
+                <button class="btn btn-sm btn-ghost" style="font-size:11px;padding:4px 8px;" onclick="document.getElementById('hist-data-input').value='';document.getElementById('hist-busca-input').value='';document.getElementById('hist-tipo-select').value='todos';document.getElementById('hist-caixa-select').value='todos';UI._filtrarModalHistorico();">🔄 Limpar Filtros (${movs.length})</button>
             </div>
         </div>
+
+        <div id="hist-resumo-cards" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));gap:10px;margin-bottom:12px;"></div>
 
         <div style="margin-bottom:10px;font-size:13px;color:var(--text-muted);" id="hist-contador-info">
             Exibindo ${movs.length} movimentações no histórico da loja até o momento
         </div>
 
-        <div style="max-height:480px;overflow-y:auto;">
+        <div style="max-height:440px;overflow-y:auto;border:1px solid rgba(255,255,255,0.08);border-radius:10px;">
             <table style="width:100%;font-size:13px;border-collapse:collapse;text-align:left;">
                 <thead style="position:sticky;top:0;background:rgba(15,20,32,0.98);z-index:2;">
                     <tr style="border-bottom:2px solid var(--border-color);color:var(--text-muted);">
@@ -278,6 +336,7 @@ UI.verHistoricoMovimentacoes = function () {
                         <th style="padding:10px;">Tipo</th>
                         <th style="padding:10px;">Caixa</th>
                         <th style="padding:10px;">Valor Total</th>
+                        <th style="padding:10px;">Custo</th>
                         <th style="padding:10px;">Descrição / Cliente</th>
                         <th style="padding:10px;text-align:center;">Ação</th>
                     </tr>
@@ -294,8 +353,11 @@ UI.verHistoricoMovimentacoes = function () {
     UI._filtrarModalHistorico = function () {
         const busca = (document.getElementById('hist-busca-input')?.value || '').toLowerCase().trim();
         const dataFiltro = document.getElementById('hist-data-input')?.value || '';
+        const tipoSelect = document.getElementById('hist-tipo-select')?.value || 'todos';
+        const caixaSelect = document.getElementById('hist-caixa-select')?.value || 'todos';
         const tbody = document.getElementById('hist-tbody-container');
         const countInfo = document.getElementById('hist-contador-info');
+        const resumoCards = document.getElementById('hist-resumo-cards');
 
         if (!tbody) return;
 
@@ -308,41 +370,93 @@ UI.verHistoricoMovimentacoes = function () {
             let matchData = true;
             if (dataFiltro && m.data) {
                 const ts = dataManager.parseDataSafe(m.data);
-                const dtStr = ts > 0 ? new Date(ts).toISOString().substring(0, 10) : (m.data || '').substring(0, 10);
+                const dtStr = ts > 0 ? dataManager.hojeLocal(new Date(ts)) : (m.data || '').substring(0, 10);
                 matchData = dtStr === dataFiltro;
             }
 
-            return matchText && matchData;
+            let matchTipo = true;
+            const tLower = (m.tipo || '').toLowerCase();
+            const isVendaReal = dataManager.isMovimentacaoVendaReal(m);
+            const isDespesaSaida = tLower === 'despesa' || tLower === 'saida' || tLower === 'compra_estoque' || (parseFloat(m.valor || 0) < 0);
+            if (tipoSelect === 'vendas') matchTipo = isVendaReal;
+            else if (tipoSelect === 'despesas') matchTipo = isDespesaSaida;
+            else if (tipoSelect === 'transferencias') matchTipo = !isVendaReal && !isDespesaSaida;
+
+            let matchCaixa = true;
+            if (caixaSelect !== 'todos') {
+                matchCaixa = (m.caixa || 'caixaSecundario') === caixaSelect;
+            }
+
+            return matchText && matchData && matchTipo && matchCaixa;
         });
+
+        let somaVendas = 0, somaSaidas = 0, somaCustos = 0;
+        filtrados.forEach(m => {
+            const val = parseFloat(m.valor || 0);
+            const tLower = (m.tipo || '').toLowerCase();
+            if (dataManager.isMovimentacaoVendaReal(m)) {
+                somaVendas += val;
+                somaCustos += parseFloat(m.custo || 0);
+            } else if (tLower === 'despesa' || tLower === 'saida' || val < 0) {
+                somaSaidas += Math.abs(val);
+            }
+        });
+        const lucroFiltro = Math.max(0, somaVendas - somaCustos - somaSaidas);
+
+        if (resumoCards) {
+            resumoCards.innerHTML = `
+                <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:10px;padding:10px;text-align:center;">
+                    <div style="font-size:10px;color:var(--text-muted);font-weight:700;text-transform:uppercase;">🟢 Vendas no Filtro</div>
+                    <div style="font-size:18px;font-weight:900;color:#10b981;margin-top:2px;">${UI.R(somaVendas)}</div>
+                </div>
+                <div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:10px;text-align:center;">
+                    <div style="font-size:10px;color:var(--text-muted);font-weight:700;text-transform:uppercase;">📦 Custo (CMV)</div>
+                    <div style="font-size:18px;font-weight:900;color:#f59e0b;margin-top:2px;">${UI.R(somaCustos)}</div>
+                </div>
+                <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:10px;text-align:center;">
+                    <div style="font-size:10px;color:var(--text-muted);font-weight:700;text-transform:uppercase;">🔴 Despesas / Saídas</div>
+                    <div style="font-size:18px;font-weight:900;color:#ef4444;margin-top:2px;">${UI.R(somaSaidas)}</div>
+                </div>
+                <div style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);border-radius:10px;padding:10px;text-align:center;">
+                    <div style="font-size:10px;color:var(--text-muted);font-weight:700;text-transform:uppercase;">💎 Lucro Líquido</div>
+                    <div style="font-size:18px;font-weight:900;color:#60a5fa;margin-top:2px;">${UI.R(lucroFiltro)}</div>
+                </div>
+            `;
+        }
 
         if (countInfo) {
             countInfo.textContent = `Exibindo ${filtrados.length} de ${movs.length} movimentações registradas`;
         }
 
         if (filtrados.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:26px;color:var(--text-muted)">Nenhuma movimentação encontrada para os filtros selecionados.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:26px;color:var(--text-muted)">Nenhuma movimentação encontrada para os filtros selecionados.</td></tr>';
             return;
         }
 
         let rowsHtml = '';
-        filtrados.forEach((m, idx) => {
+        filtrados.forEach((m) => {
             const ts = dataManager.parseDataSafe(m.data);
             const dataFmt = ts > 0 ? new Date(ts).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
             const val = parseFloat(m.valor || 0);
-            const cor = val < 0 || m.tipo === 'saida' || m.tipo === 'despesa' ? 'var(--accent-red)' : 'var(--accent-green)';
-            const tipoLabel = m.tipo === 'despesa' ? '💸 Despesa' : val < 0 ? '➖ Saída/Compra' : '➕ Venda/Entrada';
-            const caixaLabel = m.caixa ? (nomes[m.caixa] || m.caixa) : 'Secundário';
-            const descClean = (m.descricao || m.motivo || m.obs || '-').replace(/'/g, "\\'");
+            const custoVal = parseFloat(m.custo || 0);
+            const tLower = (m.tipo || '').toLowerCase();
+            const isOut = val < 0 || tLower === 'saida' || tLower === 'despesa';
+            const isTransf = tLower === 'transferencia' || tLower === 'fechamento_caixa' || tLower === 'fechamento_semanal' || tLower === 'suprimento' || tLower === 'zerado';
+            const cor = isOut ? 'var(--accent-red)' : isTransf ? '#38bdf8' : 'var(--accent-green)';
+            const tipoLabel = tLower === 'despesa' ? '💸 Despesa' : isOut ? '➖ Saída/Compra' : tLower === 'transferencia' ? '🔄 Transferência' : tLower.includes('fechamento') ? '⚖️ Fechamento' : tLower === 'suprimento' ? '📥 Suprimento' : '➕ Venda/Entrada';
+            const caixaLabel = m.caixa ? (nomes[m.caixa] || m.caixa) : '💵 Gaveta';
+            const descClean = (m.descricao || m.motivo || m.obs || '-').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
             rowsHtml += `
                 <tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
-                    <td style="padding:10px;color:var(--text-muted);font-size:12px;">${dataFmt}</td>
-                    <td style="padding:10px;color:${cor};font-weight:700;font-size:12px;">${tipoLabel}</td>
-                    <td style="padding:10px;font-size:12px;">${caixaLabel}</td>
-                    <td style="padding:10px;font-weight:800;color:${cor};font-size:13px;">${UI.R(val)}</td>
+                    <td style="padding:10px;color:var(--text-muted);font-size:12px;white-space:nowrap;">${dataFmt}</td>
+                    <td style="padding:10px;color:${cor};font-weight:700;font-size:12px;white-space:nowrap;">${tipoLabel}</td>
+                    <td style="padding:10px;font-size:12px;white-space:nowrap;">${caixaLabel}</td>
+                    <td style="padding:10px;font-weight:800;color:${cor};font-size:13px;white-space:nowrap;">${UI.R(val)}</td>
+                    <td style="padding:10px;font-weight:700;color:#f59e0b;font-size:12px;white-space:nowrap;">${custoVal > 0 ? UI.R(custoVal) : '—'}</td>
                     <td style="padding:10px;color:#FFF;font-size:13px;">${m.descricao || m.motivo || m.obs || '-'} ${m.cliente && m.cliente !== 'Não Identificado' ? `<span style="font-size:11px;color:var(--text-muted);">(${m.cliente})</span>` : ''}</td>
                     <td style="padding:10px;text-align:center;">
-                        <button class="btn btn-sm btn-ghost" style="color:#ff5555;padding:4px 8px;font-size:11px;" onclick="UI.modalConfirmarEstornarItem('${descClean}', ${val}, '${m.custo || 0}', '${m.caixa || 'caixaSecundario'}', '${m.tipo || ''}', '${m.data || ''}')">🗑️ Estornar</button>
+                        <button class="btn btn-sm btn-ghost" style="color:#ff5555;padding:4px 8px;font-size:11px;" onclick="UI.modalConfirmarEstornarItem('${descClean}', ${val}, '${custoVal}', '${m.caixa || 'caixaSecundario'}', '${m.tipo || ''}', '${m.data || ''}')">🗑️ Estornar</button>
                     </td>
                 </tr>`;
         });
@@ -362,7 +476,7 @@ UI.modalConfirmarEstornarItem = function (descricao, valor, custo, caixa, tipo, 
                 <div style="font-size:14px;color:#FFF;font-weight:700;">📦 ${descricao}</div>
                 <div style="font-size:14px;color:#ff5555;font-weight:800;margin-top:4px;">💰 Valor: ${UI.R(valor)}</div>
             </div>
-            <div style="font-size:12px;color:var(--text-muted);">Esta ação irá **descontar o valor do caixa**, **retroagir o lucro e comissão** e remover o registro do histórico.</div>
+            <div style="font-size:12px;color:var(--text-muted);">Esta ação irá <strong>ajustar o saldo do caixa</strong>, <strong>retroagir o lucro, fundo de reposição e comissão</strong> e remover o registro do histórico.</div>
         </div>
         <div class="modal-footer" style="display:flex;gap:8px;">
             <button class="btn btn-ghost" onclick="UI.closeModal()">Cancelar</button>
@@ -450,27 +564,49 @@ UI.renderCaixa = function () {
             ${UI._renderBotoesCaixa()}
         </div>
 
-        <!-- CARDS DOS CAIXAS DA LOJA (CAIXA PRINCIPAL & CAIXA FOGOS) -->
-        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:16px;margin-bottom:20px;">
-            <div class="dash-card" style="border:2px solid #10b981;background:rgba(16,185,129,0.08);padding:24px;border-radius:16px;box-shadow:var(--shadow-sm);">
+        <!-- CARDS DOS CAIXAS DA LOJA (SEPARAÇÃO ESTRITA GAVETA FÍSICA vs CONTA/PIX vs PAI vs FOGOS) -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:14px;margin-bottom:20px;">
+            <div class="dash-card" style="border:2px solid #00FFA3;background:rgba(0,255,163,0.07);padding:20px;border-radius:16px;box-shadow:var(--shadow-sm);">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
                     <div>
-                        <div class="dash-card-value" style="color:#10b981;font-size:36px;font-weight:900;">${UI.R(f.caixaPrincipal || f.caixaSecundario || 0)}</div>
-                        <div class="dash-card-label" style="font-size:15px;color:#FFF;font-weight:bold;margin-top:6px;">🏪 CAIXA PRINCIPAL (BALCÃO / LOJA)</div>
-                        <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Eletrônicos, Películas, Capas e Consertos</div>
+                        <div class="dash-card-value" style="color:#00FFA3;font-size:30px;font-weight:900;">${UI.R(f.caixaSecundario || 0)}</div>
+                        <div class="dash-card-label" style="font-size:14px;color:#FFF;font-weight:bold;margin-top:6px;">💵 GAVETA FÍSICA (DINHEIRO)</div>
+                        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Dinheiro vivo no balcão (Vendas à vista / Troco)</div>
                     </div>
-                    <div style="font-size:42px;">💰</div>
+                    <div style="font-size:34px;">💵</div>
                 </div>
             </div>
 
-            <div class="dash-card" style="border:2px solid #FFB65C;background:rgba(255,182,92,0.08);padding:24px;border-radius:16px;box-shadow:var(--shadow-sm);">
+            <div class="dash-card" style="border:2px solid #10b981;background:rgba(16,185,129,0.08);padding:20px;border-radius:16px;box-shadow:var(--shadow-sm);">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
                     <div>
-                        <div class="dash-card-value" style="color:#FFB65C;font-size:36px;font-weight:900;">${UI.R(f.caixaFogos || 0)}</div>
-                        <div class="dash-card-label" style="font-size:15px;color:#FFF;font-weight:bold;margin-top:6px;">🎇 CAIXA DE FOGOS DE ARTIFÍCIO</div>
-                        <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Vendas exclusivas de Bombas, Girandas e Fogos</div>
+                        <div class="dash-card-value" style="color:#10b981;font-size:30px;font-weight:900;">${UI.R(f.caixaPrincipal || 0)}</div>
+                        <div class="dash-card-label" style="font-size:14px;color:#FFF;font-weight:bold;margin-top:6px;">🏦 CAIXA PRINCIPAL (LOJA / PIX)</div>
+                        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Consolidado Geral + PIX, Débito e Crédito</div>
                     </div>
-                    <div style="font-size:42px;">🎇</div>
+                    <div style="font-size:34px;">🏦</div>
+                </div>
+            </div>
+
+            <div class="dash-card" style="border:2px solid #a855f7;background:rgba(168,85,247,0.08);padding:20px;border-radius:16px;box-shadow:var(--shadow-sm);">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                        <div class="dash-card-value" style="color:#c084fc;font-size:30px;font-weight:900;">${UI.R(f.caixaTerciario || 0)}</div>
+                        <div class="dash-card-label" style="font-size:14px;color:#FFF;font-weight:bold;margin-top:6px;">👨‍🦳 CAIXA TERCIÁRIO (PAI)</div>
+                        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Sangrias de turno e cota transferida</div>
+                    </div>
+                    <div style="font-size:34px;">👨‍🦳</div>
+                </div>
+            </div>
+
+            <div class="dash-card" style="border:2px solid #FFB65C;background:rgba(255,182,92,0.08);padding:20px;border-radius:16px;box-shadow:var(--shadow-sm);">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                        <div class="dash-card-value" style="color:#FFB65C;font-size:30px;font-weight:900;">${UI.R(f.caixaFogos || 0)}</div>
+                        <div class="dash-card-label" style="font-size:14px;color:#FFF;font-weight:bold;margin-top:6px;">🎇 CAIXA DE FOGOS</div>
+                        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Vendas exclusivas de Bombas e Fogos</div>
+                    </div>
+                    <div style="font-size:34px;">🎇</div>
                 </div>
             </div>
         </div>
@@ -651,32 +787,43 @@ UI.renderCaixa = function () {
                             <tr style="border-bottom:2px solid rgba(255,255,255,0.1);color:var(--text-muted);">
                                 <th style="padding:10px;">Data / Hora</th>
                                 <th style="padding:10px;">Descrição / Origem</th>
-                                <th style="padding:10px;">Valor Venda</th>
-                                <th style="padding:10px;color:#f59e0b;">Custo Reposição</th>
+                                <th style="padding:10px;">Caixa</th>
+                                <th style="padding:10px;">Valor</th>
+                                <th style="padding:10px;color:#f59e0b;">Custo</th>
                                 <th style="padding:10px;color:#10b981;">Loja (40%)</th>
                                 <th style="padding:10px;color:#c084fc;">Pai (60%)</th>
+                                <th style="padding:10px;text-align:center;">Ação</th>
                             </tr>
                         </thead>
                         <tbody>`;
 
             if (movsExibicao.length === 0) {
-                extHtml += `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted);">Nenhuma movimentação registrada no histórico</td></tr>`;
+                extHtml += `<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--text-muted);">Nenhuma movimentação registrada no histórico</td></tr>`;
             } else {
+                const mapaCx = { caixaSecundario: '💵 Gaveta', caixaPrincipal: '🏦 Principal', caixaTerciario: '👨‍🦳 Pai', caixaFogos: '🎇 Fogos', fundoCustoEstoque: '📦 Reposição' };
                 movsExibicao.forEach(m => {
-                    const dataStr = m.data ? new Date(m.data).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+                    const ts = dataManager.parseDataSafe(m.data);
+                    const dataStr = ts > 0 ? new Date(ts).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
                     const custoVal = parseFloat(m.custo || 0);
                     const valTotal = parseFloat(m.valor || 0);
-                    const lojaVal = m.parteLoja || (valTotal > 0 ? Math.round((valTotal - custoVal) * 0.40 * 100) / 100 : 0);
-                    const paiVal = m.partePai || (valTotal > 0 ? Math.round((valTotal - custoVal) * 0.60 * 100) / 100 : 0);
+                    const isVenda = dataManager.isMovimentacaoVendaReal(m);
+                    const lojaVal = isVenda ? (m.parteLoja || Math.round(Math.max(0, valTotal - custoVal) * 0.40 * 100) / 100) : 0;
+                    const paiVal = isVenda ? (m.partePai || Math.round(Math.max(0, valTotal - custoVal) * 0.60 * 100) / 100) : 0;
+                    const cxNome = mapaCx[m.caixa] || m.caixa || '💵 Gaveta';
+                    const descClean = (m.descricao || m.tipo || '-').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
                     extHtml += `
                         <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                            <td style="padding:10px;color:var(--text-muted);">${dataStr}</td>
+                            <td style="padding:10px;color:var(--text-muted);white-space:nowrap;">${dataStr}</td>
                             <td style="padding:10px;font-weight:600;color:#FFF;">${m.descricao || m.tipo}</td>
-                            <td style="padding:10px;font-weight:800;color:${valTotal < 0 ? '#ef4444' : '#10b981'};">${UI.R(valTotal)}</td>
-                            <td style="padding:10px;font-weight:700;color:#f59e0b;">${UI.R(custoVal)}</td>
-                            <td style="padding:10px;font-weight:700;color:#34d399;">${UI.R(lojaVal > 0 ? lojaVal : 0)}</td>
-                            <td style="padding:10px;font-weight:700;color:#c084fc;">${UI.R(paiVal > 0 ? paiVal : 0)}</td>
+                            <td style="padding:10px;font-size:11px;color:var(--text-muted);white-space:nowrap;">${cxNome}</td>
+                            <td style="padding:10px;font-weight:800;color:${valTotal < 0 || m.tipo === 'despesa' ? '#ef4444' : '#10b981'};white-space:nowrap;">${UI.R(valTotal)}</td>
+                            <td style="padding:10px;font-weight:700;color:#f59e0b;white-space:nowrap;">${custoVal > 0 ? UI.R(custoVal) : '—'}</td>
+                            <td style="padding:10px;font-weight:700;color:#34d399;white-space:nowrap;">${lojaVal > 0 ? UI.R(lojaVal) : '—'}</td>
+                            <td style="padding:10px;font-weight:700;color:#c084fc;white-space:nowrap;">${paiVal > 0 ? UI.R(paiVal) : '—'}</td>
+                            <td style="padding:10px;text-align:center;">
+                                <button class="btn btn-sm btn-ghost" style="color:#ff5555;padding:4px 8px;font-size:11px;" onclick="UI.modalConfirmarEstornarItem('${descClean}', ${valTotal}, '${custoVal}', '${m.caixa || 'caixaSecundario'}', '${m.tipo || ''}', '${m.data || ''}')">🗑️</button>
+                            </td>
                         </tr>`;
                 });
             }
@@ -1123,32 +1270,43 @@ UI.modalRelatorioLucroPorServico = function () {
 // === FECHAMENTO DE CAIXA / BATER CAIXA ===
 UI.modalBaterCaixa = function () {
     const f = dataManager.getFinanceiro() || {};
-    const hojeStr = new Date().toISOString().substring(0, 10);
+    const hojeStr = dataManager.hojeLocal();
+    const isDataHoje = (dt) => {
+        if (!dt) return false;
+        const ts = dataManager.parseDataSafe(dt);
+        const dLocal = ts > 0 ? dataManager.hojeLocal(new Date(ts)) : String(dt).substring(0, 10);
+        return dLocal === hojeStr;
+    };
 
-    // Vendas em dinheiro/gaveta do dia
-    const vendasHist = dataManager.data.historico?.vendas || [];
-    const vendasHoje = vendasHist.filter(v => (v.data || '').startsWith(hojeStr));
+    // Vendas do dia (separadas entre Dinheiro/Gaveta e PIX/Cartão)
+    const todosHoje = dataManager.getTodosMovimentacoesHistorico().filter(m => isDataHoje(m.data));
+    const vendasHoje = todosHoje.filter(m => dataManager.isMovimentacaoVendaReal(m));
+
     const vendasHojeDinheiro = vendasHoje
-.filter(v => !v.pagamento || v.pagamento.toLowerCase().includes('dinheiro') || v.pagamento.toLowerCase().includes('à vista') || v.caixaDestino === 'caixaSecundario')
-        .reduce((s, v) => s + (parseFloat(v.valorVenda) || parseFloat(v.valor) || 0), 0);
+        .filter(m => (m.caixa || 'caixaSecundario') === 'caixaSecundario')
+        .reduce((s, m) => s + (parseFloat(m.valor) || 0), 0);
 
-    // Movimentações do dia (entradas e saídas)
+    const vendasHojeDigital = vendasHoje
+        .filter(m => m.caixa === 'caixaPrincipal')
+        .reduce((s, m) => s + (parseFloat(m.valor) || 0), 0);
+
+    // Movimentações manuais do dia na gaveta (suprimentos/troco vs sangrias/despesas)
     const movs = dataManager.data.movimentacoesCaixa || [];
-    const movsHoje = movs.filter(m => (m.data || '').startsWith(hojeStr));
+    const movsHoje = movs.filter(m => isDataHoje(m.data));
     const suprimentosHoje = movsHoje
-        .filter(m => m.tipo === 'suprimento' || (m.valor > 0 && m.tipo !== 'venda_acessorio' && m.tipo !== 'venda_celular'))
+        .filter(m => m.tipo === 'suprimento' || (m.tipo === 'entrada' && (m.motivo || '').toLowerCase() !== 'venda manual' && (!m.caixa || m.caixa === 'caixaSecundario')))
         .reduce((s, m) => s + Math.abs(parseFloat(m.valor || 0)), 0);
 
     const sangriasDespesasHoje = movsHoje
-        .filter(m => m.tipo === 'sangria' || m.tipo === 'despesa' || m.valor < 0)
+        .filter(m => (m.tipo === 'sangria' || m.tipo === 'transferencia' || m.tipo === 'despesa' || m.tipo === 'saida' || m.valor < 0) && (!m.caixa || m.caixa === 'caixaSecundario' || m.caixaOrigem === 'caixaSecundario'))
         .reduce((s, m) => s + Math.abs(parseFloat(m.valor || 0)), 0);
 
-    // Saldo esperado do dia na gaveta
+    // Saldo esperado do dia na gaveta física
     const saldoEsperadoDia = Math.max(0, vendasHojeDinheiro + suprimentosHoje - sangriasDespesasHoje);
-    const saldoAcumulado = parseFloat(f.caixaSecundario || f.caixaPrincipal || 0);
+    const saldoAcumuladoGaveta = parseFloat(f.caixaSecundario || 0);
 
-    // Saldo cotado para o dia
-    const saldoSistemaTotal = (vendasHoje.length > 0 || movsHoje.length > 0) ? saldoEsperadoDia : (saldoAcumulado > 0 ? saldoAcumulado : 0);
+    // Saldo cotado para conferência física da gaveta (prioriza o saldo real da gaveta física)
+    const saldoSistemaTotal = saldoAcumuladoGaveta > 0 ? saldoAcumuladoGaveta : saldoEsperadoDia;
 
     // --- LÓGICA DE CATEGORIAS PROMPT 10 ---
     let catCelulares = [];
@@ -1158,12 +1316,13 @@ UI.modalBaterCaixa = function () {
     let catRetiradas = [];
 
     vendasHoje.forEach(v => {
-        const t = (v.tipo || v.pagamento || '').toLowerCase();
-        const p = (v.produto || 'Item').toLowerCase();
-        const obj = { text: `• ${v.produto || 'Item'} — ${UI.R(parseFloat(v.valorVenda) || parseFloat(v.valor) || 0)}`, val: (parseFloat(v.valorVenda) || parseFloat(v.valor) || 0) };
-        if (t.includes('celular') || t.includes('avista') || t.includes('parcelado') || t.includes('pix') || p.includes('iphone') || p.includes('samsung') || p.includes('motorola') || p.includes('xiaomi')) {
+        const t = (v.tipo || '').toLowerCase();
+        const p = (v.descricao || 'Item').toLowerCase();
+        const cxBadge = v.caixa === 'caixaPrincipal' ? '[PIX/Cartão]' : '[Dinheiro]';
+        const obj = { text: `• ${v.descricao || 'Item'} ${cxBadge}`, val: (parseFloat(v.valor) || 0) };
+        if (t.includes('celular') || t.includes('avista') || t.includes('parcelado') || p.includes('iphone') || p.includes('samsung') || p.includes('motorola') || p.includes('xiaomi')) {
             catCelulares.push(obj);
-        } else if (t.includes('acessorio') || t.includes('avulso') || t.includes('multi')) {
+        } else if (t.includes('acessorio') || t.includes('avulso') || t.includes('multi') || t.includes('pelicula')) {
             catAcessorios.push(obj);
         } else if (t.includes('conserto') || t.includes('os_')) {
             catServicos.push(obj);
@@ -1174,8 +1333,8 @@ UI.modalBaterCaixa = function () {
 
     movsHoje.forEach(m => {
         const t = (m.tipo || '').toLowerCase();
-        if (t.includes('retirada') || t.includes('despesa')) {
-            catRetiradas.push({ text: `• ${m.descricao || m.motivo || 'Retirada'} — ${UI.R(Math.abs(parseFloat(m.valor) || 0))}`, val: Math.abs(parseFloat(m.valor) || 0) });
+        if (t.includes('retirada') || t.includes('saida') || t.includes('despesa') || t.includes('transferencia')) {
+            catRetiradas.push({ text: `• ${m.descricao || m.motivo || 'Saída'} — ${UI.R(Math.abs(parseFloat(m.valor) || 0))}`, val: Math.abs(parseFloat(m.valor) || 0) });
         }
     });
 
@@ -1191,43 +1350,52 @@ UI.modalBaterCaixa = function () {
     };
 
     categoriasHtml += buildCatHtml('📱 Celulares', catCelulares, '#3b82f6');
-    categoriasHtml += buildCatHtml('🎧 Acessórios / Avulso', catAcessorios, '#a855f7');
-    categoriasHtml += buildCatHtml('🔧 Serviços / Conserto', catServicos, '#f97316');
-    categoriasHtml += buildCatHtml('💸 Retiradas', catRetiradas, '#ef4444');
+    categoriasHtml += buildCatHtml('🎧 Acessórios / Películas / Avulso', catAcessorios, '#a855f7');
+    categoriasHtml += buildCatHtml('🔧 Serviços / Conserto (OS)', catServicos, '#f97316');
+    categoriasHtml += buildCatHtml('💸 Retiradas / Despesas / Sangrias', catRetiradas, '#ef4444');
     categoriasHtml += buildCatHtml('📦 Outros', catOutros, '#9ca3af');
 
     UI.openModal('⚖️ BATER CAIXA — FECHAMENTO DIÁRIO', `
         <div style="padding:12px">
-            <div style="background:rgba(16,185,129,0.1);border:1px solid #10b981;border-radius:12px;padding:14px;margin-bottom:16px;">
-                <div style="font-size:13px;color:#10b981;font-weight:800;text-transform:uppercase;">💰 SALDO ESPERADO NA GAVETA HOJE:</div>
-                <div style="font-size:28px;font-weight:900;color:#00FFA3;margin-top:4px;">${UI.R(saldoSistemaTotal)}</div>
-                <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">
-                    💵 Vendas Dinheiro Hoje: <strong>${UI.R(vendasHojeDinheiro)}</strong> | 💸 Saídas/Despesas Hoje: <strong>${UI.R(sangriasDespesasHoje)}</strong>
-                    <br>🏦 Saldo Acumulado nos Caixas: ${UI.R(saldoAcumulado)}
+            <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:10px;margin-bottom:16px;">
+                <div style="background:rgba(16,185,129,0.1);border:1px solid #10b981;border-radius:12px;padding:14px;">
+                    <div style="font-size:12px;color:#10b981;font-weight:800;text-transform:uppercase;">💵 ESPERADO NA GAVETA (DINHEIRO):</div>
+                    <div style="font-size:26px;font-weight:900;color:#00FFA3;margin-top:4px;">${UI.R(saldoSistemaTotal)}</div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">
+                        Vendas Dinheiro Hoje: <strong>${UI.R(vendasHojeDinheiro)}</strong><br>
+                        Suprimentos: <strong>${UI.R(suprimentosHoje)}</strong> | Saídas Gaveta: <strong>${UI.R(sangriasDespesasHoje)}</strong>
+                    </div>
+                </div>
+                <div style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.4);border-radius:12px;padding:14px;">
+                    <div style="font-size:12px;color:#60a5fa;font-weight:800;text-transform:uppercase;">💳 PIX & CARTÃO HOJE (CONTA):</div>
+                    <div style="font-size:26px;font-weight:900;color:#60a5fa;margin-top:4px;">${UI.R(vendasHojeDigital)}</div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">
+                        Saldo Acumulado Conta Principal: <strong>${UI.R(f.caixaPrincipal || 0)}</strong>
+                    </div>
                 </div>
             </div>
 
             <div style="margin-bottom:16px;">
-                <h4 style="font-size:15px;color:#FFD700;margin-bottom:10px;">📋 HISTÓRICO DO DIA (POR CATEGORIA):</h4>
-                ${categoriasHtml}
+                <h4 style="font-size:15px;color:#FFD700;margin-bottom:10px;">📋 HISTÓRICO DO DIA (${hojeStr.split('-').reverse().join('/')}):</h4>
+                ${categoriasHtml || '<div style="font-size:13px;color:var(--text-muted);padding:10px;">Nenhuma movimentação registrada hoje ainda.</div>'}
             </div>
 
             <h4 style="font-size:15px;color:#FFD700;margin-bottom:10px;">💵 CONTAGEM FÍSICA DE DINHEIRO NA GAVETA:</h4>
             
             <div class="form-group">
-                <label class="form-label">Valor total contado na gaveta (R$):</label>
-                <input class="form-input" id="bater-gaveta-valor" type="number" step="0.01" style="font-size:22px;font-weight:700;text-align:center;padding:12px;color:#00FFA3" placeholder="0,00" oninput="UI._calcularConferênciaBaterCaixa(${saldoSistemaTotal})">
+                <label class="form-label">Valor em DINHEIRO contado na gaveta (R$):</label>
+                <input class="form-input" id="bater-gaveta-valor" type="number" step="0.01" style="font-size:22px;font-weight:700;text-align:center;padding:12px;color:#00FFA3" placeholder="0,00" oninput="UI._calcularConferênciaBaterCaixa(${saldoSistemaTotal}, ${vendasHojeDigital})">
             </div>
 
             <div class="form-group" style="margin-top:12px">
-                <label class="form-label">Comprovantes em Cartão / PIX no dia (opcional R$):</label>
-                <input class="form-input" id="bater-maquina-valor" type="number" step="0.01" style="font-size:18px;text-align:center;padding:10px" placeholder="0,00">
+                <label class="form-label">Soma dos comprovantes Cartão / PIX no dia (opcional R$):</label>
+                <input class="form-input" id="bater-maquina-valor" type="number" step="0.01" style="font-size:18px;text-align:center;padding:10px" placeholder="0,00" oninput="UI._calcularConferênciaBaterCaixa(${saldoSistemaTotal}, ${vendasHojeDigital})">
             </div>
 
             <div id="bater-caixa-resultado" style="margin-top:16px;"></div>
 
             <div class="form-group" style="margin-top:12px">
-                <label class="form-label">Observações da funcionária (ex: sangria feita, troco):</label>
+                <label class="form-label">Observações do turno (ex: sangria feita, troco):</label>
                 <textarea class="form-textarea" id="bater-obs" placeholder="Ex: Deixado R$ 50 de troco para amanhã..." style="font-size:14px;height:70px"></textarea>
             </div>
 
@@ -1239,50 +1407,59 @@ UI.modalBaterCaixa = function () {
     `);
 };
 
-UI._calcularConferênciaBaterCaixa = function (saldoEsperado) {
-    const valorGaveta = parseFloat(document.getElementById('bater-gaveta-valor')?.value || 0);
-    const valorMaquina = parseFloat(document.getElementById('bater-maquina-valor')?.value || 0);
+UI._calcularConferênciaBaterCaixa = function (saldoEsperado, digitalEsperado = 0) {
+    const rawGaveta = document.getElementById('bater-gaveta-valor')?.value;
+    const rawMaquina = document.getElementById('bater-maquina-valor')?.value;
     const div = document.getElementById('bater-caixa-resultado');
     if (!div) return;
 
-    if (isNaN(valorGaveta) && isNaN(valorMaquina)) {
+    if (!rawGaveta && !rawMaquina) {
         div.innerHTML = '';
         return;
     }
 
-    const dif = (valorGaveta + valorMaquina) - saldoEsperado;
+    const valorGaveta = parseFloat(rawGaveta || 0);
+    const valorMaquina = parseFloat(rawMaquina || 0);
+    const dif = valorGaveta - saldoEsperado;
+    const infoDigital = rawMaquina !== '' && rawMaquina !== undefined
+        ? `<div style="font-size:12px;color:#93c5fd;margin-top:6px;">💳 PIX/Cartão Declarado: ${UI.R(valorMaquina)} (Sistema: ${UI.R(digitalEsperado)})</div>`
+        : '';
+
     if (Math.abs(dif) < 0.05) {
         div.innerHTML = `
             <div style="background:rgba(16,185,129,0.15);border:2px solid #10b981;border-radius:10px;padding:14px;text-align:center;">
                 <div style="font-size:24px;">✅</div>
-                <strong style="color:#10b981;font-size:18px;">CAIXA BATEU PERFEITAMENTE!</strong>
-                <div style="font-size:13px;color:#FFF;margin-top:4px;">Diferença: R$ 0,00</div>
+                <strong style="color:#10b981;font-size:18px;">GAVETA BATEU PERFEITAMENTE!</strong>
+                <div style="font-size:13px;color:#FFF;margin-top:4px;">Diferença na Gaveta: R$ 0,00</div>
+                ${infoDigital}
             </div>`;
     } else if (dif > 0) {
         div.innerHTML = `
             <div style="background:rgba(59,130,246,0.15);border:2px solid #3b82f6;border-radius:10px;padding:14px;text-align:center;">
                 <div style="font-size:24px;">📈</div>
-                <strong style="color:#3b82f6;font-size:18px;">SOBRA NO CAIXA</strong>
-                <div style="font-size:13px;color:#FFF;margin-top:4px;">Temos <strong style="color:#3b82f6">R$ ${dif.toFixed(2)}</strong> a mais que o sistema.</div>
+                <strong style="color:#3b82f6;font-size:18px;">SOBRA NA GAVETA FÍSICA</strong>
+                <div style="font-size:13px;color:#FFF;margin-top:4px;">Temos <strong style="color:#3b82f6">R$ ${dif.toFixed(2)}</strong> em dinheiro a mais que o sistema.</div>
+                ${infoDigital}
             </div>`;
     } else {
         div.innerHTML = `
             <div style="background:rgba(239,68,68,0.15);border:2px solid #ef4444;border-radius:10px;padding:14px;text-align:center;">
                 <div style="font-size:24px;">📉</div>
-                <strong style="color:#ef4444;font-size:18px;">QUEBRA / FALTA DE CAIXA</strong>
-                <div style="font-size:13px;color:#FFF;margin-top:4px;">Faltam <strong style="color:#ef4444">R$ ${Math.abs(dif).toFixed(2)}</strong> para bater.</div>
+                <strong style="color:#ef4444;font-size:18px;">QUEBRA / FALTA NA GAVETA</strong>
+                <div style="font-size:13px;color:#FFF;margin-top:4px;">Faltam <strong style="color:#ef4444">R$ ${Math.abs(dif).toFixed(2)}</strong> em dinheiro para bater.</div>
+                ${infoDigital}
             </div>`;
     }
 };
 
 UI._confirmarBaterCaixa = function (saldoEsperado) {
-    const valorGaveta = parseFloat(document.getElementById('bater-gaveta-valor')?.value || 0);
+    const valorGaveta = parseFloat(document.getElementById('bater-gaveta-valor')?.value);
     const valorMaquina = parseFloat(document.getElementById('bater-maquina-valor')?.value || 0);
     const obs = document.getElementById('bater-obs')?.value?.trim() || '';
 
     if (isNaN(valorGaveta)) return UI.toast('Informe o valor contado na gaveta', 'error');
 
-    const dif = (valorGaveta + valorMaquina) - saldoEsperado;
+    const dif = valorGaveta - saldoEsperado;
     const dataHora = new Date().toISOString();
 
     if (!dataManager.data.fechamentosCaixa) dataManager.data.fechamentosCaixa = [];
@@ -2170,12 +2347,46 @@ UI.ajustarCustoEspecifico = function (dataId, produtoNome) {
     const novoCusto = parseFloat(novoCustoStr.replace(',', '.'));
     if (isNaN(novoCusto) || novoCusto < 0) return UI.toast('Valor de custo inválido!', 'error');
     
+    const difCusto = novoCusto - valorAtualCusto;
+    const lucroAntigo = Math.max(0, valorVenda - valorAtualCusto);
+    const lucroNovo = Math.max(0, valorVenda - novoCusto);
+    const difLucro = lucroNovo - lucroAntigo;
+
     venda.custo = novoCusto;
     venda.lucro = valorVenda - novoCusto;
+
+    // Sincronizar registro correspondente em movimentacoesCaixa
+    const movs = dataManager.data.movimentacoesCaixa || [];
+    const tsVenda = new Date(dataId).getTime();
+    const movMatch = movs.find(m => {
+        const tsM = new Date(m.data).getTime();
+        const sameTime = !isNaN(tsVenda) && !isNaN(tsM) && Math.abs(tsVenda - tsM) < 3000;
+        const sameDesc = (m.descricao || '').includes(produtoNome);
+        return (sameTime || sameDesc) && Math.abs((parseFloat(m.valor) || 0) - valorVenda) < 0.05;
+    });
+    if (movMatch) {
+        movMatch.custo = novoCusto;
+        movMatch.lucro = lucroNovo;
+        movMatch.parteLoja = Math.round(lucroNovo * 0.40 * 100) / 100;
+        movMatch.partePai = Math.round(lucroNovo * 0.60 * 100) / 100;
+    }
+
+    // Atualizar Fundo de Reposição e Divisão de Lucro
+    if (dataManager.data.fundoCustoEstoque) {
+        dataManager.data.fundoCustoEstoque.totalAcumulado = Math.max(0, (dataManager.data.fundoCustoEstoque.totalAcumulado || 0) + difCusto);
+        if (dataManager.data.fundoCustoEstoque.saldoGuardado !== undefined) {
+            dataManager.data.fundoCustoEstoque.saldoGuardado = Math.max(0, (dataManager.data.fundoCustoEstoque.saldoGuardado || 0) + difCusto);
+        }
+    }
+    if (dataManager.data.divisaoLucro) {
+        dataManager.data.divisaoLucro.totalLucroAcumulado = Math.max(0, (dataManager.data.divisaoLucro.totalLucroAcumulado || 0) + difLucro);
+        dataManager.data.divisaoLucro.acumuladoLoja40 = Math.max(0, (dataManager.data.divisaoLucro.acumuladoLoja40 || 0) + Math.round(difLucro * 0.40 * 100) / 100);
+        dataManager.data.divisaoLucro.acumuladoPai60 = Math.max(0, (dataManager.data.divisaoLucro.acumuladoPai60 || 0) + Math.round(difLucro * 0.60 * 100) / 100);
+    }
     
     dataManager.saveData();
-    dataManager.salvarSupabase();
-    UI.toast('Custo e lucro atualizados no histórico com sucesso!', 'success');
+    if (dataManager.supabase) dataManager.salvarSupabase();
+    UI.toast('Custo, lucro e rateio 40/60 atualizados em todo o sistema!', 'success');
     UI.atualizarTabelaExtrair();
 };
 

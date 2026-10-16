@@ -229,6 +229,41 @@ for (const arq of arquivosVisiveis) {
 }
 assert(ocorrenciasIlannaUI === 0, `Zero ocorrências visíveis do nome "Ilanna" nos arquivos de interface e fluxo vendedor`);
 
+// TESTE 13: Filtro estrito de Venda Real (Transferências, Suprimentos e Fechamentos NÃO inflam vendas da semana)
+dm.data.movimentacoesCaixa = [
+    { id: 5001, data: dStr, tipo: 'venda', descricao: 'Venda Capinha', valor: 60, custo: 20, lucro: 40, caixa: 'caixaSecundario' },
+    { id: 5002, data: dStr, tipo: 'transferencia', descricao: 'Transferência entre caixas', valor: 500, custo: 0, lucro: 0, caixa: 'caixaPrincipal' },
+    { id: 5003, data: dStr, tipo: 'fechamento_caixa', descricao: 'Fechamento de Caixa Diário', valor: 300, custo: 0, lucro: 0, caixa: 'caixaSecundario' },
+    { id: 5004, data: dStr, tipo: 'suprimento', descricao: 'Troco de Gaveta', valor: 100, custo: 0, lucro: 0, caixa: 'caixaSecundario' }
+];
+dm.data.historico.vendas = [];
+const fechSemTransferencia = dm.getFechamentoSemanal();
+assert(fechSemTransferencia.vendasSemana === 60, `Fechamento semanal ignora transferências/fechamentos/suprimentos (esperado: R$ 60, obtido: R$ ${fechSemTransferencia.vendasSemana})`);
+
+// TESTE 14: Estorno Completo de Venda (estornarMovimentacao / estornarVendaERetroagirCaixa)
+dm.data.financeiro.caixaSecundario = 200;
+dm.data.fundoCustoEstoque = { totalAcumulado: 100, saldoGuardado: 100, historicoCusto: [] };
+dm.data.divisaoLucro = { totalLucroAcumulado: 50, acumuladoLoja40: 20, acumuladoPai60: 30, historicoDivisao: [] };
+dm.data.movimentacoesCaixa = [];
+dm.data.historico.vendas = [];
+
+dm._registrarSincronizacaoFinanceira({
+    tipo: 'venda_avista',
+    produto: 'Fone Bluetooth Pro',
+    valorVenda: 100,
+    custo: 40,
+    caixaDestino: 'caixaSecundario',
+    cliente: 'Cliente Estorno'
+});
+const idMovGerada = dm.data.movimentacoesCaixa[0].id;
+assert(dm.data.financeiro.caixaSecundario === 300, `Antes do estorno: Caixa Secundário = R$ 300 (obtido: ${dm.data.financeiro.caixaSecundario})`);
+
+const resultadoEstorno = dm.estornarMovimentacao(idMovGerada);
+assert(resultadoEstorno.sucesso === true, `estornarMovimentacao executou sem erro`);
+assert(dm.data.financeiro.caixaSecundario === 200, `Após estorno: Valor integral (R$ 100) foi deduzido do Caixa Secundário (esperado: 200, obtido: ${dm.data.financeiro.caixaSecundario})`);
+assert(dm.data.fundoCustoEstoque.saldoGuardado === 100, `Após estorno: Custo (R$ 40) foi revertido do Fundo de Reposição (esperado: 100, obtido: ${dm.data.fundoCustoEstoque.saldoGuardado})`);
+assert(dm.data.divisaoLucro.totalLucroAcumulado === 50, `Após estorno: Lucro Líquido (R$ 60) foi revertido da Divisão de Lucros (esperado: 50, obtido: ${dm.data.divisaoLucro.totalLucroAcumulado})`);
+
 console.log('\n=================================================================');
 console.log(`🎯 RESULTADO FINAL: ${passados} / ${total} TESTES PASSARAM COM SUCESSO!`);
 console.log('=================================================================');

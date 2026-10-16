@@ -1202,13 +1202,14 @@ class DataManager {
                 lista.push({
                     data: m.data || new Date().toISOString(),
                     tipo: m.tipo || 'movimentacao',
+                    motivo: m.motivo || '',
                     descricao: m.descricao || m.motivo || m.obs || 'Movimentação de Caixa',
                     valor: m.valor || 0,
                     custo: m.custo || 0,
                     lucro: m.lucro || (m.valor ? Math.max(0, m.valor - (m.custo || 0)) : 0),
                     parteLoja: m.parteLoja || 0,
                     partePai: m.partePai || 0,
-                    caixa: m.caixa || 'caixaSecundario',
+                    caixa: m.caixa || m.caixaDestino || 'caixaSecundario',
                     cliente: m.cliente || 'Não Identificado',
                     origem: 'movimentacoesCaixa'
                 });
@@ -1234,7 +1235,7 @@ class DataManager {
                     lucro: luc,
                     parteLoja: Math.round(luc * 0.40 * 100) / 100,
                     partePai: Math.round(luc * 0.60 * 100) / 100,
-                    caixa: 'caixaSecundario',
+                    caixa: v.caixaDestino || v.caixa || 'caixaSecundario',
                     cliente: v.cliente || 'Cliente Backup',
                     origem: 'historicoVendas'
                 });
@@ -1284,6 +1285,19 @@ class DataManager {
         });
 
         return lista.sort((a, b) => this.parseDataSafe(b.data) - this.parseDataSafe(a.data));
+    }
+
+    isMovimentacaoVendaReal(m) {
+        if (!m || (parseFloat(m.valor || 0) <= 0)) return false;
+        const t = (m.tipo || '').toLowerCase();
+        const tiposNaoVenda = [
+            'despesa', 'saida', 'sangria', 'transferencia', 'fechamento_caixa',
+            'fechamento_semanal', 'zerado', 'deposito_fundo', 'uso_fundo',
+            'compra_estoque', 'suprimento', 'alteracao_sistema'
+        ];
+        if (tiposNaoVenda.includes(t)) return false;
+        if (t === 'entrada' && (m.motivo || '').toLowerCase() !== 'venda manual') return false;
+        return true;
     }
 
     parseDataSafe(d) {
@@ -1396,7 +1410,7 @@ class DataManager {
                     despesasSemana += val;
                     if (diaObj) diaObj.despesas += val;
                     itensDespesas.push(m.descricao ? m.descricao.replace('DESPESA: ', '') : 'Despesa');
-                } else if (m.valor > 0) {
+                } else if (this.isMovimentacaoVendaReal(m)) {
                     const valVenda = parseFloat(m.valor || 0);
                     const valCusto = parseFloat(m.custo || 0);
                     vendasSemana += valVenda;
@@ -2115,7 +2129,7 @@ class DataManager {
     // ===== FECHAMENTO DIÁRIO DETALHADO TELEGRAM =====
     async enviarFechamentoDiarioTelegram() {
         if (!this.data.configuracoes?.telegramBotToken) return { sucesso: false, erro: 'Bot do Telegram não configurado' };
-        const hojeStr = new Date().toISOString().substring(0, 10);
+        const hojeStr = this.hojeLocal();
         const dataFormatada = new Date().toLocaleDateString('pt-BR');
         const todosMovs = this.getTodosMovimentacoesHistorico();
         
@@ -2124,11 +2138,11 @@ class DataManager {
         
         todosMovs.forEach(m => {
             const ts = this.parseDataSafe(m.data);
-            const mDateStr = ts > 0 ? new Date(ts).toISOString().substring(0, 10) : (m.data || '').substring(0, 10);
+            const mDateStr = ts > 0 ? this.hojeLocal(new Date(ts)) : (m.data || '').substring(0, 10);
             if (mDateStr === hojeStr) {
                 if (m.tipo === 'despesa') {
                     despesas += Math.abs(parseFloat(m.valor || 0));
-                } else if (m.valor > 0) {
+                } else if (this.isMovimentacaoVendaReal(m)) {
                     const v = parseFloat(m.valor || 0);
                     const c = parseFloat(m.custo || 0);
                     vendas += v;
@@ -2166,10 +2180,10 @@ class DataManager {
     async enviarFechamentoMensalTelegram() {
         if (!this.data.configuracoes?.telegramBotToken) return { sucesso: false, erro: 'Bot do Telegram não configurado' };
         const agora = new Date();
-        const anoMesAtual = agora.toISOString().substring(0, 7);
+        const anoMesAtual = this.hojeLocal(agora).substring(0, 7);
         
         let mesAnteriorDate = new Date(agora.getFullYear(), agora.getMonth() - 1, 1);
-        const anoMesAnterior = mesAnteriorDate.toISOString().substring(0, 7);
+        const anoMesAnterior = this.hojeLocal(mesAnteriorDate).substring(0, 7);
         
         const mesNome = agora.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
@@ -2185,28 +2199,29 @@ class DataManager {
 
         todosMovs.forEach(m => {
             const ts = this.parseDataSafe(m.data);
-            const mDateStr = ts > 0 ? new Date(ts).toISOString().substring(0, 7) : (m.data || '').substring(0, 7);
+            const mDateStr = ts > 0 ? this.hojeLocal(new Date(ts)).substring(0, 7) : (m.data || '').substring(0, 7);
             const mYearStr = mDateStr.substring(0, 4);
             const val = parseFloat(m.valor || m.valorVenda || 0);
+            const isVenda = this.isMovimentacaoVendaReal(m);
             
-            if (mYearStr === anoAtualStr && val > 0 && m.tipo !== 'despesa') {
+            if (mYearStr === anoAtualStr && isVenda) {
                 vendasAnoAtual += val;
                 mesesComVenda.add(mDateStr);
             }
 
-            if (mDateStr === anoMesAnterior && val > 0 && m.tipo !== 'despesa') {
+            if (mDateStr === anoMesAnterior && isVenda) {
                 vendasAnterior += val;
             }
 
             if (mDateStr === anoMesAtual) {
                 if (m.tipo === 'despesa') {
                     despesas += Math.abs(parseFloat(m.valor || 0));
-                } else if (val > 0) {
+                } else if (isVenda) {
                     vendas += val;
                     custo += parseFloat(m.custo || 0);
                     qtdVendas++;
                     
-                    let prod = m.produto || m.nome || 'Diversos';
+                    let prod = m.produto || m.nome || m.descricao || 'Diversos';
                     produtosMes[prod] = (produtosMes[prod] || 0) + 1;
                 }
             }
@@ -2502,30 +2517,25 @@ class DataManager {
 
     // ===== RELATÓRIO MENSAL DE CUSTOS E DESPESAS DIA A DIA =====
     getRelatorioMensalPorDia(mesAno) {
-        if (!mesAno) mesAno = new Date().toISOString().substring(0, 7);
+        if (!mesAno) mesAno = this.hojeLocal().substring(0, 7);
         const agrupado = {};
+        const todosMovs = this.getTodosMovimentacoesHistorico();
 
-        const vendas = this.data.historico?.vendas || [];
-        const movs = this.data.movimentacoesCaixa || [];
-
-        vendas.forEach(v => {
-            const data = (v.data || '').substring(0, 10);
+        todosMovs.forEach(m => {
+            const ts = this.parseDataSafe(m.data);
+            const data = ts > 0 ? this.hojeLocal(new Date(ts)) : (m.data || '').substring(0, 10);
             if (!data || !data.startsWith(mesAno)) return;
             if (!agrupado[data]) agrupado[data] = { data, vendas: 0, custo: 0, despesas: 0, itensDespesas: [] };
-            const val = parseFloat(v.valorVenda || v.valor || 0);
-            const c = parseFloat(v.custo || 0);
-            agrupado[data].vendas += val;
-            agrupado[data].custo += c;
-        });
 
-        movs.forEach(m => {
-            const data = (m.data || '').substring(0, 10);
-            if (!data || !data.startsWith(mesAno)) return;
-            if (!agrupado[data]) agrupado[data] = { data, vendas: 0, custo: 0, despesas: 0, itensDespesas: [] };
             if (m.tipo === 'despesa') {
                 const val = Math.abs(parseFloat(m.valor || 0));
                 agrupado[data].despesas += val;
                 agrupado[data].itensDespesas.push(m.descricao ? m.descricao.replace('DESPESA: ', '') : 'Despesa');
+            } else if (this.isMovimentacaoVendaReal(m)) {
+                const val = parseFloat(m.valor || 0);
+                const c = parseFloat(m.custo || 0);
+                agrupado[data].vendas += val;
+                agrupado[data].custo += c;
             }
         });
 
@@ -2707,6 +2717,7 @@ class DataManager {
         // 3. Extrato Geral de Movimentações
         if (!this.data.movimentacoesCaixa) this.data.movimentacoesCaixa = [];
         this.data.movimentacoesCaixa.push({
+            id: Date.now() + Math.floor(Math.random() * 1000),
             data: new Date().toISOString(),
             tipo: tipo || 'venda',
             caixa: caixaDestino || 'caixaPrincipal',
@@ -2726,12 +2737,48 @@ class DataManager {
     }
 
     // ===== ESTORNAR / CANCELAR VENDA OU MOVIMENTAÇÃO (CORREÇÃO DE CAIXAS) =====
-    estornarMovimentacao(itemDesc, itemValor, itemData, tipo = 'venda') {
-        const valVenda = parseFloat(itemValor) || 0;
+    estornarVendaERetroagirCaixa(dados = {}) {
+        return this.estornarMovimentacao(
+            dados.nomeProduto || dados.descricao || '',
+            dados.valorVenda !== undefined ? dados.valorVenda : dados.valor,
+            dados.dataItem || dados.data || '',
+            dados.tipo || 'venda',
+            dados.custo,
+            dados.caixaOrigem || dados.caixa
+        );
+    }
+
+    estornarMovimentacao(itemDesc, itemValor, itemData, tipo = 'venda', custoInformado = undefined, caixaInformado = undefined) {
+        // Suporte a chamada por ID numérico ou por Objeto direto
+        if (typeof itemDesc === 'number' || (typeof itemDesc === 'string' && /^\d+$/.test(itemDesc) && itemValor === undefined)) {
+            const idBusca = Number(itemDesc);
+            const movEncontrada = (this.data.movimentacoesCaixa || []).find(m => Number(m.id) === idBusca);
+            if (!movEncontrada) {
+                return { sucesso: false, msg: 'Movimentação não encontrada pelo ID.' };
+            }
+            itemDesc = movEncontrada.descricao || movEncontrada.motivo || '';
+            itemValor = movEncontrada.valor;
+            itemData = movEncontrada.data;
+            tipo = movEncontrada.tipo || 'venda';
+            custoInformado = movEncontrada.custo;
+            caixaInformado = movEncontrada.caixa;
+        } else if (typeof itemDesc === 'object' && itemDesc !== null) {
+            const obj = itemDesc;
+            itemDesc = obj.nomeProduto || obj.descricao || obj.produto || '';
+            itemValor = obj.valorVenda !== undefined ? obj.valorVenda : obj.valor;
+            itemData = obj.dataItem || obj.data || '';
+            tipo = obj.tipo || 'venda';
+            custoInformado = obj.custo;
+            caixaInformado = obj.caixaOrigem || obj.caixa;
+        }
+
+        const valRaw = parseFloat(itemValor) || 0;
+        const valVenda = Math.abs(valRaw);
         const descClean = (itemDesc || '').toLowerCase().trim();
+        const tipoLower = (tipo || '').toLowerCase();
         
-        let valorCusto = 0;
-        if (descClean.includes('custo peça:') || descClean.includes('custo peca:')) {
+        let valorCusto = custoInformado !== undefined ? (parseFloat(custoInformado) || 0) : 0;
+        if (valorCusto <= 0 && (descClean.includes('custo peça:') || descClean.includes('custo peca:'))) {
             const matchCusto = descClean.match(/custo pe[çc]a:\s*r\$\s*([\d\.,]+)/i);
             if (matchCusto) valorCusto = parseFloat(matchCusto[1].replace(/\./g, '').replace(',', '.')) || 0;
         }
@@ -2740,11 +2787,15 @@ class DataManager {
         let parteLoja = Math.round(lucroLiquido * 0.40 * 100) / 100;
         let partePai = Math.round(lucroLiquido * 0.60 * 100) / 100;
 
-        let caixaOrigem = 'caixaSecundario';
-        if (descClean.includes('caixaterciario') || descClean.includes('terciario') || descClean.includes('pai')) {
-            caixaOrigem = 'caixaTerciario';
-        } else if (descClean.includes('caixafogos') || descClean.includes('fogos')) {
-            caixaOrigem = 'caixaFogos';
+        let caixaOrigem = caixaInformado || 'caixaSecundario';
+        if (!caixaInformado) {
+            if (descClean.includes('caixaterciario') || descClean.includes('terciario') || descClean.includes('pai')) {
+                caixaOrigem = 'caixaTerciario';
+            } else if (descClean.includes('caixafogos') || descClean.includes('fogos')) {
+                caixaOrigem = 'caixaFogos';
+            } else if (descClean.includes('caixaprincipal')) {
+                caixaOrigem = 'caixaPrincipal';
+            }
         }
 
         const matchItem = (itemText, itemVal, itemTimestamp) => {
@@ -2753,23 +2804,39 @@ class DataManager {
                 const dt2 = new Date(itemTimestamp).getTime();
                 if (!isNaN(dt1) && !isNaN(dt2) && Math.abs(dt1 - dt2) < 2000) return true;
             }
-            
             const txt = (itemText || '').toLowerCase().trim();
-            const textMatch = descClean.includes(txt) || txt.includes(descClean) || (descClean.includes(txt.substring(0, 15)));
-            const valMatch = itemVal === undefined || Math.abs((parseFloat(itemVal) || 0) - valVenda) < 0.05;
-            
-            return (textMatch || valMatch) && valMatch;
+            const textMatch = txt && descClean && (descClean.includes(txt) || txt.includes(descClean) || descClean.includes(txt.substring(0, 15)));
+            const valMatch = itemVal === undefined || Math.abs(Math.abs(parseFloat(itemVal) || 0) - valVenda) < 0.05;
+            return Boolean(textMatch && valMatch);
         };
 
-        // 1. Retroagir Caixas Financeiros
+        // Se for estorno de Despesa ou Saída, devolve o valor para o caixa de onde saiu
+        if (tipoLower === 'despesa' || tipoLower === 'saida' || valRaw < 0) {
+            if (this.data.financeiro) {
+                const cx = this.data.financeiro[caixaOrigem] !== undefined ? caixaOrigem : 'caixaSecundario';
+                this.data.financeiro[cx] = (this.data.financeiro[cx] || 0) + valVenda;
+            }
+            if (this.data.movimentacoesCaixa) {
+                const idxMov = this.data.movimentacoesCaixa.findIndex(m => matchItem(m.descricao || m.motivo, m.valor, m.data));
+                if (idxMov !== -1) this.data.movimentacoesCaixa.splice(idxMov, 1);
+            }
+            this.data._ultimoSaveLocal = Date.now();
+            this.saveData();
+            if (this.supabase) this.salvarSupabase();
+            return { sucesso: true, msg: 'Despesa/Saída estornada e devolvida ao caixa.' };
+        }
+
+        // 1. Retroagir Caixas Financeiros (Desconta o valor real da venda que entrou no caixa)
         if (this.data.financeiro) {
             if (caixaOrigem === 'caixaTerciario') {
                 this.data.financeiro.caixaTerciario = Math.max(0, (this.data.financeiro.caixaTerciario || 0) - partePai);
             } else if (caixaOrigem === 'caixaFogos') {
                 this.data.financeiro.caixaFogos = Math.max(0, (this.data.financeiro.caixaFogos || 0) - valVenda);
+            } else if (caixaOrigem === 'caixaPrincipal') {
+                this.data.financeiro.caixaPrincipal = Math.max(0, (this.data.financeiro.caixaPrincipal || 0) - valVenda);
             } else {
-                this.data.financeiro.caixaSecundario = Math.max(0, (this.data.financeiro.caixaSecundario || 0) - parteLoja);
-                this.data.financeiro.caixaPrincipal = Math.max(0, (this.data.financeiro.caixaPrincipal || 0) - parteLoja);
+                this.data.financeiro.caixaSecundario = Math.max(0, (this.data.financeiro.caixaSecundario || 0) - valVenda);
+                this.data.financeiro.caixaPrincipal = Math.max(0, (this.data.financeiro.caixaPrincipal || 0) - valVenda);
             }
         }
 
@@ -2785,7 +2852,7 @@ class DataManager {
             }
         }
 
-        // 3. Retroagir Comissão da Ilanna se aplicável (Consertos também pontuam)
+        // 3. Retroagir Comissão Mensal se aplicável
         const isFogos = (tipo || '').includes('fogos') || descClean.includes('fogo');
         const isVendaCelular = (tipo || '').includes('avista') || (tipo || '').includes('parcelado') || (tipo || '').includes('crediario') || (tipo || '').includes('pix');
 
@@ -2806,18 +2873,38 @@ class DataManager {
             }
         }
 
-        // 5. Remover do histórico de vendas
+        // 5. Remover do histórico de vendas e devolver ao estoque se aplicável
         if (this.data.historico && this.data.historico.vendas) {
             const idxVenda = this.data.historico.vendas.findIndex(v => matchItem(v.produto, v.valorVenda || v.valor, v.data));
             if (idxVenda !== -1) {
-                this.data.historico.vendas.splice(idxVenda, 1);
+                const vendaRemovida = this.data.historico.vendas.splice(idxVenda, 1)[0];
+                const prodNome = (vendaRemovida?.produto || '').toLowerCase();
+                if (prodNome) {
+                    const cel = (this.data.estoqueCelulares || []).find(c => c.nome && prodNome.includes(c.nome.toLowerCase()));
+                    if (cel && cel.status === 'vendido') {
+                        cel.status = 'disponivel';
+                        cel.quantidade = (cel.quantidade || 0) + 1;
+                    } else {
+                        const ac = (this.data.estoqueAcessorios || []).find(a => a.nome && prodNome.includes(a.nome.toLowerCase()));
+                        if (ac) {
+                            ac.status = 'disponivel';
+                            ac.quantidade = (ac.quantidade || 0) + 1;
+                        }
+                    }
+                }
             }
         }
 
-        // 6. Remover de fundoCustoEstoque se aplicável
-        if (this.data.fundoCustoEstoque && Array.isArray(this.data.fundoCustoEstoque.historicoCusto)) {
-            const idxCusto = this.data.fundoCustoEstoque.historicoCusto.findIndex(c => matchItem(c.produto, c.valorVenda, c.data));
-            if (idxCusto !== -1) this.data.fundoCustoEstoque.historicoCusto.splice(idxCusto, 1);
+        // 6. Retroagir fundoCustoEstoque se aplicável
+        if (this.data.fundoCustoEstoque) {
+            if (valorCusto > 0) {
+                this.data.fundoCustoEstoque.totalAcumulado = Math.max(0, (this.data.fundoCustoEstoque.totalAcumulado || 0) - valorCusto);
+                this.data.fundoCustoEstoque.saldoGuardado = Math.max(0, (this.data.fundoCustoEstoque.saldoGuardado || 0) - valorCusto);
+            }
+            if (Array.isArray(this.data.fundoCustoEstoque.historicoCusto)) {
+                const idxCusto = this.data.fundoCustoEstoque.historicoCusto.findIndex(c => matchItem(c.produto, c.valorVenda, c.data));
+                if (idxCusto !== -1) this.data.fundoCustoEstoque.historicoCusto.splice(idxCusto, 1);
+            }
         }
 
         this.data._ultimoSaveLocal = Date.now();

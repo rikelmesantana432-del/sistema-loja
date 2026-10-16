@@ -1,36 +1,12 @@
-# Segredos e Configurações Privadas
-supabase_secret.txt
-supabase_secret_backup.txt
-.env
-*.env
-
-# Perfil e Sessões do Navegador (Pesados e bloqueados por processo)
-chrome-profile/
-chrome-profile/*
-
-# Arquivos Temporários e Backups Locais
-_backups/
-_fotos_temp/
-*.log
-*.tmp
-*.bak
-
-# Arquivos do Sistema Operacional
-Thumbs.db
-Desktop.ini
-.DS_Store
-
-# Banco de Dados temporário
+# Protecao Estrita de Banco de Dados e Backups Locais (NUNCA ENVIAR DADOS DO BANCO)
 *.db
-
-# Plataformas de Deploy e Testes Locais
-.netlify/
-.vercel/
+*.sqlite
+*.sqlite3
+*.sql
+*backup*.json
+*dump*.json
+.env
+.env.*
 node_modules/
-
-# Prints e Evidências Temporárias de Teste
-teste*.png
-teste*.jpg
-mockup*.png
-mockup*.jpg
-
+.DS_Store
+Thumbs.db

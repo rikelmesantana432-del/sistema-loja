@@ -636,7 +636,7 @@ UI._estoqueRemoverProduto = function (id, tipo) {
     const nomeProd = prod.nome;
     if (!confirm(`⚠️ Tem certeza que deseja EXCLUIR "${nomeProd}" do estoque?`)) return;
 
-    if (dataManager.estornarVendaERetroagirCaixa) {
+    if (prod.status === 'vendido' && dataManager.estornarVendaERetroagirCaixa) {
         dataManager.estornarVendaERetroagirCaixa({
             nomeProduto: nomeProd,
             valorVenda: prod.precoVenda || 0,
