@@ -995,9 +995,13 @@ UI._vendedorPasso3 = function () {
                 <span class="vendedor-btn-icon" style="font-size:36px">📱</span><span class="vendedor-btn-title" style="font-size:22px;font-weight:800">PIX</span>
                 <span class="vendedor-btn-valor" style="font-size:20px">${UI.R(precoFinal)}</span>
             </button>
+            <button class="vendedor-btn-pag" style="padding:20px" onclick="UI._vndConfirmar('debito',${precoFinal})">
+                <span class="vendedor-btn-icon" style="font-size:36px">💳</span><span class="vendedor-btn-title" style="font-size:22px;font-weight:800">DÉBITO</span>
+                <span class="vendedor-btn-valor" style="font-size:20px">${UI.R(precoFinal)}</span>
+            </button>
             <button class="vendedor-btn-pag" style="padding:20px" onclick="UI._vndCartao()">
-                <span class="vendedor-btn-icon" style="font-size:36px">💳</span><span class="vendedor-btn-title" style="font-size:22px;font-weight:800">CARTÃO</span>
-                <span class="vendedor-btn-desc" style="font-size:16px">Débito ou crédito até 18x</span>
+                <span class="vendedor-btn-icon" style="font-size:36px">💳</span><span class="vendedor-btn-title" style="font-size:22px;font-weight:800">CRÉDITO</span>
+                <span class="vendedor-btn-desc" style="font-size:16px">À vista ou até 18x</span>
             </button>
             <button class="vendedor-btn-pag vendedor-btn-pag-wide" style="padding:20px;background:rgba(255,215,0,0.1);border-color:rgba(255,215,0,0.3)" onclick="UI._vndDividirPagamento(false, ${precoFinal})">
                 <span class="vendedor-btn-icon" style="font-size:36px">🔀</span><span class="vendedor-btn-title" style="font-size:22px;font-weight:800;color:#FFD700">DIVIDIR PAGAMENTO</span>
@@ -1262,34 +1266,47 @@ UI._vndConfirmarDivisao = function (isMulti, precoFinal) {
 
 UI._vndFinalizar = function (forma, valorCliente) {
     const d = UI._vendedorDados; if (!d) return;
-    const caixaDestino = document.getElementById('vnd-caixa-destino')?.value || 'caixaSecundario';
+    const caixaSelecionado = document.getElementById('vnd-caixa-destino')?.value || 'caixaPrincipal';
+    const caixaEfetivo = caixaSelecionado === 'caixaFogos' ? 'caixaFogos' : (forma === 'dinheiro' ? 'caixaSecundario' : 'caixaPrincipal');
     const taxas = dataManager.data.taxasCartao;
     let valorRecebido = valorCliente;
-    if (forma === 'pix') valorRecebido = d.precoFinal; // Taxa 100% repassada ao cliente
-    else if (forma === 'debito') valorRecebido = d.precoFinal; // Taxa 100% repassada ao cliente
+    if (forma === 'pix') valorRecebido = d.precoFinal;
+    else if (forma === 'debito') valorRecebido = d.precoFinal;
     else if (forma.startsWith('credito')) {
         const parcelas = forma === 'credito_1x' ? 'credito' : forma.replace('credito_', '');
         const taxa = taxas[parcelas] || taxas.credito || 2.91;
-        valorRecebido = d.precoFinal; // Taxa 100% repassada ao cliente
+        valorRecebido = d.precoFinal;
     }
     if (!dataManager.isModoTreino()) {
+        const nomeCli = UI._clienteAtual ? UI._clienteAtual.nome : '';
         // Verificar se é acessório ou celular
         if (d.tipo === 'acess') {
             if (typeof dataManager.venderAcessorio === 'function') {
-                dataManager.venderAcessorio(d.prodId, valorRecebido, UI._clienteAtual ? UI._clienteAtual.nome : '', caixaDestino);
+                dataManager.venderAcessorio(d.prodId, valorRecebido, nomeCli, caixaEfetivo);
             }
         } else {
-            if (typeof dataManager.venderAVista === 'function') {
-                dataManager.venderAVista(d.prodId, valorRecebido, UI._clienteAtual ? UI._clienteAtual.nome : '', caixaDestino);
+            if (caixaSelecionado === 'caixaFogos' || forma === 'dinheiro') {
+                if (typeof dataManager.venderAVista === 'function') {
+                    dataManager.venderAVista(d.prodId, valorRecebido, nomeCli, caixaEfetivo);
+                }
+            } else if (forma === 'pix') {
+                if (typeof dataManager.venderParcelado === 'function') {
+                    dataManager.venderParcelado(d.prodId, valorRecebido, 1, 'pix', nomeCli);
+                }
+            } else if (forma === 'debito') {
+                if (typeof dataManager.venderParcelado === 'function') {
+                    dataManager.venderParcelado(d.prodId, valorRecebido, 0, 'normal', nomeCli);
+                }
+            } else if (forma.startsWith('credito')) {
+                const numParc = parseInt(forma.replace('credito_', '').replace('x', '')) || 1;
+                if (typeof dataManager.venderParcelado === 'function') {
+                    dataManager.venderParcelado(d.prodId, valorCliente, numParc, 'normal', nomeCli);
+                }
             }
         }
         // Fidelidade: Adicionar pontos
         if (typeof UI._adicionarPontosFidelidade === 'function') {
             UI._adicionarPontosFidelidade(valorCliente);
-        }
-        // Notificação Instantânea Telegram (Enviar para você e o grupo da Ilanna)
-        if (typeof dataManager.enviarNotificacaoVendaTelegram === 'function') {
-            dataManager.enviarNotificacaoVendaTelegram(d.prod?.nome || 'Produto', valorCliente, forma.replace('credito_', '').replace('_', ' ').toUpperCase(), UI._clienteAtual?.nome || 'Consumidor Geral');
         }
     }
     UI._tocarSomCaixa();
@@ -2358,7 +2375,7 @@ UI.modalConectarScannerCelular = function () {
         <div style="padding:16px;text-align:center;">
             <h3 style="color:#00d97e;margin:0 0 10px 0;">📲 TRANSFORME O CELULAR EM LEITOR SEM FIO</h3>
             <p style="font-size:14px;color:var(--text-muted);margin-bottom:14px;">
-                Abra a câmera do celular da Ilanna e escaneie o QR Code abaixo para abrir o scanner sem fio. Quando ela bipar um produto na prateleira, ele aparecerá <strong>na hora na tela deste Notebook!</strong>
+                Abra a câmera do celular da loja e escaneie o QR Code abaixo para abrir o scanner sem fio. Quando bipar um produto na prateleira, ele aparecerá <strong>na hora na tela deste Notebook!</strong>
             </p>
             <div style="background:#fff;padding:12px;display:inline-block;border-radius:16px;margin:10px 0;box-shadow:0 8px 24px rgba(0,0,0,0.5);">
                 <img src="${qrUrl}" alt="QR Connect" style="width:180px;height:180px;display:block;">
@@ -2425,7 +2442,7 @@ UI._confirmarRegistroFalta = function () {
     const obs = inputObs ? inputObs.value.trim() : '';
     if (!nome) return UI.toast('Digite o nome do produto procurado', 'error');
 
-    const res = dataManager.adicionarProdutoProcurado(nome, obs, 'Ilanna');
+    const res = dataManager.adicionarProdutoProcurado(nome, obs, 'Atendente');
     if (res.sucesso) {
         UI.toast(`📋 Produto procurado "${nome}" registrado com sucesso!`, 'success');
         UI.closeModal();

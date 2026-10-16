@@ -47,13 +47,13 @@ UI._vendedorAvulso = function () {
 
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
                 <div>
-                    <label style="display:block; font-size: 16px; margin-bottom: 8px; color: var(--text-secondary);">Custo Pago (R$) <span style="font-size:12px;color:var(--text-muted);">(opcional — preencher depois no Caixa)</span>:</label>
-                    <input type="number" id="avulso-custo" class="form-input" placeholder="0.00 (deixe em branco se não souber)" step="0.50" style="font-size: 20px; padding: 16px; width: 100%; font-weight: 600;" oninput="UI._checkAvulso()">
+                    <label style="display:block; font-size: 16px; margin-bottom: 8px; color: #f59e0b; font-weight:700;">Custo (R$): * <span style="font-size:12px;color:var(--text-muted);font-weight:400;">(Obrigatório para o financeiro)</span></label>
+                    <input type="number" id="avulso-custo" class="form-input" placeholder="Ex: 5.00" step="0.50" required style="font-size: 20px; padding: 16px; width: 100%; font-weight: 600; border-color: rgba(245, 158, 11, 0.4);" oninput="UI._checkAvulso()">
                     <div id="avulso-custo-sugestao" style="font-size:12px; color:var(--text-muted); margin-top:4px;"></div>
                 </div>
                 <div>
                     <label style="display:block; font-size: 16px; margin-bottom: 8px; color: var(--accent-green); font-weight:700;">Preço Venda (R$): *</label>
-                    <input type="number" id="avulso-valor" class="form-input" placeholder="0.00" step="0.50" style="font-size: 24px; padding: 16px; width: 100%; font-weight: 800; color: var(--accent-green);" oninput="UI._checkAvulso()">
+                    <input type="number" id="avulso-valor" class="form-input" placeholder="0.00" step="0.50" required style="font-size: 24px; padding: 16px; width: 100%; font-weight: 800; color: var(--accent-green);" oninput="UI._checkAvulso()">
                 </div>
             </div>
         </div>
@@ -64,7 +64,10 @@ UI._vendedorAvulso = function () {
         </div>
     `);
 
-    setTimeout(() => document.getElementById('avulso-valor').focus(), 100);
+    setTimeout(() => {
+        UI._suggestAvulsoCost();
+        document.getElementById('avulso-custo')?.focus();
+    }, 100);
 };
 
 UI._suggestAvulsoCost = function () {
@@ -98,10 +101,12 @@ UI._focusAvulsoInput = function (prefix) {
 UI._checkAvulso = function () {
     const desc = document.getElementById('avulso-desc').value.trim();
     const val = parseFloat(document.getElementById('avulso-valor').value);
+    const custoStr = (document.getElementById('avulso-custo')?.value || '').trim();
+    const custo = parseFloat(custoStr);
     const btn = document.getElementById('btn-avulso-next');
 
-    // Custo é opcional — o vendedor só precisa digitar a descrição e o valor de venda
-    if (desc.length > 2 && !isNaN(val) && val > 0) {
+    // Custo e Valor de Venda são obrigatórios
+    if (desc.length > 2 && !isNaN(val) && val > 0 && custoStr !== '' && !isNaN(custo) && custo >= 0) {
         btn.style.opacity = '1';
         btn.style.pointerEvents = 'auto';
     } else {
@@ -113,8 +118,12 @@ UI._checkAvulso = function () {
 UI._vendedorAvulsoPasso2 = function () {
     const desc = document.getElementById('avulso-desc').value.trim();
     const val = parseFloat(document.getElementById('avulso-valor').value);
-    const custoInput = document.getElementById('avulso-custo')?.value;
-    const custo = (!custoInput || isNaN(parseFloat(custoInput)) || parseFloat(custoInput) < 0) ? 0 : parseFloat(custoInput);
+    const custoStr = (document.getElementById('avulso-custo')?.value || '').trim();
+    const custo = parseFloat(custoStr);
+
+    if (custoStr === '' || isNaN(custo) || custo < 0) {
+        return UI.toast('Informe o custo do produto avulso para continuar!', 'error');
+    }
 
     const prodAvulso = {
         id: 'avulso_' + Date.now(),
@@ -130,11 +139,7 @@ UI._vendedorAvulsoPasso2 = function () {
     if (!UI._vendedorCarrinho) UI._vendedorCarrinho = [];
     UI._vendedorCarrinho.push(prodAvulso);
 
-    if (custo === 0) {
-        UI.toast(`📦 Produto Avulso adicionado ao carrinho! (Custo pendente — pode preencher no Caixa depois)`, 'warning');
-    } else {
-        UI.toast(`📦 Produto Avulso adicionado ao carrinho (Custo: ${UI.R(custo)})!`, 'success');
-    }
+    UI.toast(`📦 Produto Avulso adicionado ao carrinho (Custo: ${UI.R(custo)})!`, 'success');
     
     // Renderiza de volta a tela principal de Venda (com o carrinho atualizado)
     UI._vendedorVenderProdutos(UI._clienteAtual || {nome:'Consumidor Geral'});

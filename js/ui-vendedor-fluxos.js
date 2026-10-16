@@ -146,7 +146,10 @@ UI._consertoPasso3 = function () {
     UI._consertoServicosAtuais = servicos;
 
     const telaPeca = (servicos.tela || servicos.telaOriginal || { p: 110, m: 50, d: 3 });
-    const sugTela = Math.ceil(((telaPeca.p || 110) + (telaPeca.m || 50)) * 1.5 / 10) * 10;
+    const cTela = telaPeca.p || 110;
+    const sugTela = cTela <= 80 ? Math.max(Math.ceil((cTela * 3.0) / 10) * 10, 80) :
+        cTela <= 200 ? Math.ceil((cTela * 2.0 + 40) / 10) * 10 :
+        Math.ceil((cTela * 1.5 + 80) / 10) * 10;
 
     let html = `<div class="vendedor-step-header"><span class="vendedor-step-badge" style="background:${VENDEDOR_CORES.conserto.accent}">PASSO 3 DE 5</span><h2 style="font-size:28px">🔧 QUAL O SERVIÇO?</h2><p style="font-size:20px">Aparelho: ${modelo}</p></div>`;
     
@@ -629,7 +632,8 @@ UI._peliculaFinalizarPag = function (forma) {
 
 UI._peliculaFinalizar = function (forma, nome, custoInt, preco) {
     console.log('=== PELÍCULA FINALIZAR ===', { forma, nome, custoInt, preco });
-    if (!dataManager.isModoTreino()) { dataManager.venderPelicula(UI._peliculaData.modelo, nome, preco, 'hd_hidrogel', UI._clienteAtual ? UI._clienteAtual.nome : ''); }
+    const caixaDest = forma === 'dinheiro' ? 'caixaSecundario' : 'caixaPrincipal';
+    if (!dataManager.isModoTreino()) { dataManager.venderPelicula(UI._peliculaData.modelo, nome, preco, 'hd_hidrogel', UI._clienteAtual ? UI._clienteAtual.nome : '', caixaDest); }
     UI._tocarSomCaixa();
     const nomeCliente = UI._clienteAtual ? UI._clienteAtual.nome : 'Cliente';
     if (UI._clienteAtual && !dataManager.isModoTreino()) {
@@ -870,13 +874,18 @@ UI._trocaCalcular = function () {
         });
     }
 
-    // Calcular desconto total
-    const descBateria = Math.round(valorBase * (100 - batPct) / 100);
-    const descArranho = Math.round(valorBase * (100 - arrPct) / 100);
-    const descDefeitos = Math.round(valorBase * defeitoPct / 100);
-    const descCaixa = Math.round(valorBase * (100 - cxPct) / 100);
+    // Calcular desconto total com margem segura de revenda para a loja
+    const baseCalculo = modoCalculo === 'automatico' ? Math.round(valorBase * 0.55) : valorBase;
+    const descBateria = Math.round(baseCalculo * (100 - batPct) / 100);
+    const descArranho = Math.round(baseCalculo * (100 - arrPct) / 100);
+    const descDefeitos = Math.round(baseCalculo * defeitoPct / 100);
+    const descCaixa = Math.round(baseCalculo * (100 - cxPct) / 100);
     const totalDescontos = descBateria + descArranho + descDefeitos + descCaixa;
-    const valorUsado = Math.max(0, valorBase - totalDescontos);
+    let valorUsado = Math.max(0, baseCalculo - totalDescontos);
+    if (modoCalculo === 'automatico') {
+        const tetoSeguranca = Math.round(valorBase * 0.60);
+        if (valorUsado > tetoSeguranca) valorUsado = tetoSeguranca;
+    }
     const clientePaga = Math.max(0, d.prod.precoVenda - valorUsado);
 
     // Labels das perguntas
@@ -890,11 +899,9 @@ UI._trocaCalcular = function () {
         defeitosHtml = defeitosDesc.map(df => `<div style="display:flex;justify-content:space-between;font-size:16px;color:var(--accent-red);padding:2px 0"><span>${df.desc.split('(')[0].trim()}</span><span>-${df.pct}%</span></div>`).join('');
     }
 
-    // === RESULTADO COM TABELA REFERENCIAL DE ESTOQUE ===
+    // === RESULTADO COM SELO DE VIABILIDADE (SEM EXPOR CUSTO INTERNO AO CLIENTE) ===
     const custoNosso = d.prod.custo || 0;
     const precoNosso = d.prod.precoVenda || 0;
-    const metaCompra50 = Math.round(valorBase * 0.50);
-    const lucroOperacaoCombinado = (clientePaga + valorUsado) - (custoNosso + valorUsado);
 
     let seloTroca = '🔥 EXCELENTE OPORTUNIDADE';
     let corSelo = '#10b981';
@@ -917,44 +924,38 @@ UI._trocaCalcular = function () {
             <div style="font-size:46px;font-weight:900;color:var(--accent-green);margin:14px 0">
                 💰 ${UI.R(clientePaga)}
             </div>
-            <p style="font-size:16px;color:var(--text-muted)">(Entrada do ${modeloUsado.toUpperCase()} no valor de R$ ${valorUsado.toFixed(2)})</p>
+            <p style="font-size:16px;color:var(--text-muted)">(Entrada do ${modeloUsado.toUpperCase()} avaliado em ${UI.R(valorUsado)})</p>
         </div>
 
-        <!-- TABELA REFERENCIAL ESTOQUE VS ENTRADA -->
+        <!-- RESUMO DA PROPOSTA PARA O CLIENTE -->
         <div style="background:rgba(15,20,32,0.95);border:1px solid rgba(255,215,0,0.3);border-radius:16px;padding:20px;margin-bottom:16px;">
-            <h4 style="margin:0 0 12px;font-size:16px;color:#FFD700;font-weight:800;">📊 TABELA REFERENCIAL (NOSSO ESTOQUE VS APARELHO DE ENTRADA)</h4>
+            <h4 style="margin:0 0 12px;font-size:16px;color:#FFD700;font-weight:800;">📊 RESUMO DA PROPOSTA DE TROCA</h4>
             <div style="overflow-x:auto;">
-                <table style="width:100%;font-size:13px;border-collapse:collapse;text-align:left;">
+                <table style="width:100%;font-size:15px;border-collapse:collapse;text-align:left;">
                     <thead>
                         <tr style="border-bottom:2px solid rgba(255,255,255,0.1);color:var(--text-muted);">
                             <th style="padding:8px;">Item</th>
                             <th style="padding:8px;">Aparelho</th>
-                            <th style="padding:8px;">Preço Venda</th>
-                            <th style="padding:8px;color:#f59e0b;">Custo / Mercado</th>
-                            <th style="padding:8px;color:#10b981;">Avaliação / Crédito</th>
+                            <th style="padding:8px;text-align:right;">Valor</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                            <td style="padding:8px;font-weight:700;color:#00FFA3;">📱 Nosso Estoque</td>
+                            <td style="padding:8px;font-weight:700;color:#00FFA3;">📱 Aparelho da Loja</td>
                             <td style="padding:8px;color:#FFF;font-weight:700;">${d.prod.nome}</td>
-                            <td style="padding:8px;font-weight:800;color:#10b981;">${UI.R(precoNosso)}</td>
-                            <td style="padding:8px;font-weight:800;color:#f59e0b;">${UI.R(custoNosso)}</td>
-                            <td style="padding:8px;color:var(--text-muted);">—</td>
+                            <td style="padding:8px;font-weight:800;color:#10b981;text-align:right;">${UI.R(precoNosso)}</td>
                         </tr>
                         <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                            <td style="padding:8px;font-weight:700;color:#3b82f6;">📲 Entrada Cliente</td>
+                            <td style="padding:8px;font-weight:700;color:#3b82f6;">📲 Entrada do Cliente</td>
                             <td style="padding:8px;color:#FFF;font-weight:700;">${modeloUsado.toUpperCase()}</td>
-                            <td style="padding:8px;color:var(--text-muted);">R$ ${valorBase.toFixed(2)} (Mercado)</td>
-                            <td style="padding:8px;font-weight:800;color:#3b82f6;">${UI.R(metaCompra50)} (Meta 50%)</td>
-                            <td style="padding:8px;font-weight:800;color:#10b981;">${UI.R(valorUsado)}</td>
+                            <td style="padding:8px;font-weight:800;color:#3b82f6;text-align:right;">- ${UI.R(valorUsado)}</td>
+                        </tr>
+                        <tr>
+                            <td colspan="2" style="padding:10px 8px;font-weight:900;color:#FFD700;">💰 DIFERENÇA A PAGAR:</td>
+                            <td style="padding:10px 8px;font-weight:900;color:#00FFA3;font-size:18px;text-align:right;">${UI.R(clientePaga)}</td>
                         </tr>
                     </tbody>
                 </table>
-            </div>
-            <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;background:rgba(16,185,129,0.1);padding:10px 14px;border-radius:10px;border-left:4px solid #10b981;">
-                <span style="font-size:13px;font-weight:700;color:var(--text-muted);">LUCRO LÍQUIDO ESTIMADO DA OPERAÇÃO:</span>
-                <strong style="font-size:16px;color:#10b981;">+ ${UI.R(lucroOperacaoCombinado)}</strong>
             </div>
         </div>
 
@@ -965,7 +966,7 @@ UI._trocaCalcular = function () {
             ${defeitosHtml ? `<div style="padding:4px 0">${defeitosHtml}</div>` : ''}
             ${descDefeitos > 0 ? `<div style="display:flex;justify-content:space-between;font-size:16px;padding:4px 0;font-weight:700"><span>🔧 Total defeitos</span><strong style="color:var(--accent-red)">-${UI.R(descDefeitos)} (-${defeitoPct}%)</strong></div>` : ''}
             ${descCaixa > 0 ? `<div style="display:flex;justify-content:space-between;font-size:16px;padding:4px 0"><span>📦 Acessórios: ${cxLabel}</span><strong style="color:var(--accent-red)">-${UI.R(descCaixa)} (-${100 - cxPct}%)</strong></div>` : ''}
-            ${totalDescontos === 0 ? '<p style="font-size:16px;color:var(--accent-green);padding:4px 0">✅ Nenhum desconto — aparelho perfeito!</p>' : ''}
+            ${totalDescontos === 0 ? '<p style="font-size:16px;color:var(--accent-green);padding:4px 0">✅ Nenhum desconto adicional por defeito!</p>' : ''}
         </div>
 
         <div class="vendedor-nav" style="margin-top:20px">
@@ -974,38 +975,91 @@ UI._trocaCalcular = function () {
             <button class="btn btn-lg" style="background:${VENDEDOR_CORES.trocar.accent};color:#fff;font-size:22px;padding:14px 28px" onclick="UI._trocaFinalizarPag('fazer')">✅ FAZER ESSA TROCA</button>
         </div>`);
 
-    UI._trocaResultData = { modeloUsado, valorUsado, clientePaga };
+    UI._trocaResultData = { modeloUsado, valorUsado, clientePaga, valorBase };
     console.log('=== TROCA RESULTADO ===', UI._trocaResultData);
 };
 
-// Bug 2: Wrapper que pega dados salvos
+// Bug 2: Wrapper que pega dados salvos e pergunta forma de pagamento da diferença
 UI._trocaFinalizarPag = function (acao) {
     console.log('=== TROCA AÇÃO ===', acao);
     const r = UI._trocaResultData;
     if (!r) { console.error('Dados da troca perdidos!'); UI.toast('Erro: dados perdidos', 'error'); return; }
     if (acao === 'orcamento') {
         UI._salvarOrcamentoTroca(r.modeloUsado, r.valorUsado, r.clientePaga);
+    } else if (acao === 'fazer' && r.clientePaga > 0) {
+        document.getElementById('main-content').innerHTML = _vndWrap('trocar', `
+            <div class="vendedor-step-header">
+                <span class="vendedor-step-badge" style="background:${VENDEDOR_CORES.trocar.accent}">PAGAMENTO DA DIFERENÇA</span>
+                <h2 style="font-size:28px">💰 COMO O CLIENTE VAI PAGAR A DIFERENÇA?</h2>
+                <p style="font-size:20px">Diferença a receber: <strong style="color:var(--accent-green);font-size:24px">${UI.R(r.clientePaga)}</strong></p>
+            </div>
+            <div class="vendedor-grid-pag">
+                <button class="vendedor-btn-pag" style="padding:20px" onclick="UI._trocaFinalizar('${r.modeloUsado.replace(/'/g, "\\'")}', ${r.valorUsado}, ${r.clientePaga}, 'dinheiro')"><span class="vendedor-btn-icon" style="font-size:36px">💵</span><span class="vendedor-btn-title" style="font-size:22px">DINHEIRO</span><span class="vendedor-btn-valor" style="font-size:20px">${UI.R(r.clientePaga)}</span></button>
+                <button class="vendedor-btn-pag" style="padding:20px" onclick="UI._trocaFinalizar('${r.modeloUsado.replace(/'/g, "\\'")}', ${r.valorUsado}, ${r.clientePaga}, 'pix')"><span class="vendedor-btn-icon" style="font-size:36px">📱</span><span class="vendedor-btn-title" style="font-size:22px">PIX</span><span class="vendedor-btn-valor" style="font-size:20px">${UI.R(r.clientePaga)}</span></button>
+                <button class="vendedor-btn-pag" style="padding:20px" onclick="UI._trocaFinalizar('${r.modeloUsado.replace(/'/g, "\\'")}', ${r.valorUsado}, ${r.clientePaga}, 'debito')"><span class="vendedor-btn-icon" style="font-size:36px">💳</span><span class="vendedor-btn-title" style="font-size:22px">DÉBITO</span><span class="vendedor-btn-valor" style="font-size:20px">${UI.R(r.clientePaga)}</span></button>
+                <button class="vendedor-btn-pag" style="padding:20px" onclick="UI._trocaFinalizar('${r.modeloUsado.replace(/'/g, "\\'")}', ${r.valorUsado}, ${r.clientePaga}, 'credito')"><span class="vendedor-btn-icon" style="font-size:36px">💳</span><span class="vendedor-btn-title" style="font-size:22px">CRÉDITO</span><span class="vendedor-btn-valor" style="font-size:20px">${UI.R(r.clientePaga)}</span></button>
+            </div>
+            <div class="vendedor-nav"><button class="btn btn-ghost btn-lg" style="font-size:18px" onclick="UI._trocaCalcular()">← Voltar</button></div>`);
     } else {
-        UI._trocaFinalizar(r.modeloUsado, r.valorUsado, r.clientePaga, acao);
+        UI._trocaFinalizar(r.modeloUsado, r.valorUsado, r.clientePaga, acao === 'fazer' ? 'dinheiro' : acao);
     }
 };
 
-UI._trocaFinalizar = function (modeloUsado, valorUsado, clientePaga, forma) {
+UI._trocaFinalizar = function (modeloUsado, valorUsado, clientePaga, forma = 'dinheiro') {
     console.log('=== TROCA FINALIZAR ===', { modeloUsado, valorUsado, clientePaga, forma });
     const d = UI._trocaDados;
     if (!dataManager.isModoTreino()) {
+        const custoNosso = parseFloat(d.prod.custo || 0);
+        const custoLiquidoOperacao = Math.max(0, custoNosso - valorUsado);
+        const lucroOperacao = Math.max(0, clientePaga - custoLiquidoOperacao);
+        const caixaDest = forma === 'dinheiro' ? 'caixaSecundario' : 'caixaPrincipal';
+        const nomeCli = UI._clienteAtual ? UI._clienteAtual.nome : 'Cliente';
+
         if (!dataManager.data.historico.vendas) dataManager.data.historico.vendas = [];
         dataManager.data.historico.vendas.push({
             tipo: 'troca', data: new Date().toISOString(),
+            produto: `Troca: ${d.prod.nome} (Entrada: ${modeloUsado.toUpperCase()})`,
             produtoNovo: d.prod.nome, precoNovo: d.prod.precoVenda,
-            celularUsado: modeloUsado, valorUsado, clientePagou: clientePaga,
-            formaPagamento: forma
+            celularUsado: modeloUsado, valorUsado,
+            valorVenda: clientePaga, clientePagou: clientePaga,
+            custo: custoLiquidoOperacao, lucro: lucroOperacao,
+            formaPagamento: forma, caixaDestino: caixaDest, cliente: nomeCli
         });
         // Marcar produto como vendido
-        d.prod.status = 'vendido';
+        if (d.prod.quantidade && d.prod.quantidade > 1) {
+            d.prod.quantidade -= 1;
+        } else {
+            d.prod.quantidade = 0;
+            d.prod.status = 'vendido';
+        }
         d.prod.dataVenda = new Date().toISOString().split('T')[0];
-        // Registrar financeiro
-        dataManager.data.financeiro.caixaAtual += clientePaga;
+
+        // Dar entrada do aparelho usado do cliente no estoque de seminovos
+        const revendaSugerida = Math.max(Math.round((UI._trocaResultData?.valorBase || valorUsado * 1.6) / 10) * 10, valorUsado + 250);
+        dataManager.data.estoqueCelulares.push({
+            id: Date.now(),
+            nome: modeloUsado.toUpperCase(),
+            custo: valorUsado,
+            precoVenda: revendaSugerida,
+            condicao: 'Seminovo (Troca)',
+            status: 'disponivel',
+            quantidade: 1,
+            dataEntrada: dataManager.hojeLocal ? dataManager.hojeLocal() : new Date().toISOString().split('T')[0],
+            origem: `Troca c/ ${nomeCli}`
+        });
+
+        // Registrar sincronização financeira da diferença paga
+        if (clientePaga > 0) {
+            dataManager._registrarSincronizacaoFinanceira({
+                tipo: forma === 'dinheiro' ? 'troca_dinheiro' : `troca_${forma}`,
+                produto: `Troca: ${d.prod.nome} (Entrada: ${modeloUsado.toUpperCase()})`,
+                valorVenda: clientePaga,
+                custo: custoLiquidoOperacao,
+                caixaDestino: caixaDest,
+                cliente: nomeCli
+            });
+        }
+
         // Salvar no histórico do cliente + pontos
         if (UI._clienteAtual) {
             const pontos = Math.floor(clientePaga / 10);
@@ -1014,7 +1068,7 @@ UI._trocaFinalizar = function (modeloUsado, valorUsado, clientePaga, forma) {
             UI._clienteAtual.historico.push({
                 tipo: 'troca', data: new Date().toISOString().split('T')[0],
                 produtoNovo: d.prod.nome, celularUsado: modeloUsado,
-                valorUsado, clientePagou: clientePaga, pontos
+                valorUsado, clientePagou: clientePaga, formaPagamento: forma, pontos
             });
         }
         dataManager.saveData();

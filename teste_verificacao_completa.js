@@ -160,6 +160,75 @@ dm.verificarViradaDeMes();
 assert(dm.data.financeiro.caixaSecundario === 0, `Caixa físico zerado após virada de mês (esperado: 0, obtido: ${dm.data.financeiro.caixaSecundario})`);
 assert(dm.data.historicoFechamentoMensal && dm.data.historicoFechamentoMensal.length > 0, 'Histórico mensal arquivado no fechamento');
 
+// TESTE 9: Roteamento estrito PIX/Cartão (caixaPrincipal) vs Dinheiro (caixaSecundario)
+dm.data.financeiro.caixaSecundario = 200;
+dm.data.financeiro.caixaPrincipal = 1000;
+dm._registrarSincronizacaoFinanceira({
+    tipo: 'venda_celular_avista',
+    produto: 'iPhone 13 128GB',
+    valorVenda: 2800,
+    custo: 2100,
+    caixaDestino: 'caixaPrincipal',
+    cliente: 'Cliente PIX'
+});
+assert(dm.data.financeiro.caixaSecundario === 200, `Venda via PIX (caixaPrincipal) NÃO alterou a gaveta física caixaSecundario (permaneceu R$ ${dm.data.financeiro.caixaSecundario})`);
+assert(dm.data.financeiro.caixaPrincipal === 3800, `Venda via PIX creditou corretamente o caixaPrincipal (esperado: 3800, obtido: ${dm.data.financeiro.caixaPrincipal})`);
+
+// TESTE 10: Ordem de Serviço - Entrada em PIX vs Entrada em Dinheiro
+const gavetaAntesOS = dm.data.financeiro.caixaSecundario;
+const principalAntesOS = dm.data.financeiro.caixaPrincipal;
+dm.criarOrdemServico({
+    clienteNome: 'Maria OS PIX',
+    aparelho: 'Samsung A54',
+    servico: 'Troca de Tela',
+    valorOrcamento: 350,
+    custoPeca: 140,
+    valorEntrada: 150,
+    formaPagamentoEntrada: 'pix'
+});
+assert(dm.data.financeiro.caixaSecundario === gavetaAntesOS, `Sinal de OS em PIX NÃO entrou na gaveta física`);
+assert(dm.data.financeiro.caixaPrincipal === principalAntesOS + 150, `Sinal de OS em PIX entrou no caixaPrincipal (+R$ 150)`);
+
+dm.criarOrdemServico({
+    clienteNome: 'José OS Dinheiro',
+    aparelho: 'Moto G84',
+    servico: 'Troca de Bateria',
+    valorOrcamento: 180,
+    custoPeca: 60,
+    valorEntrada: 80,
+    formaPagamentoEntrada: 'dinheiro'
+});
+assert(dm.data.financeiro.caixaSecundario === gavetaAntesOS + 80, `Sinal de OS em Dinheiro entrou na gaveta física (+R$ 80)`);
+
+// TESTE 11: Venda de Película roteando entre Gaveta (Dinheiro) e Conta (PIX)
+const gavetaAntesPel = dm.data.financeiro.caixaSecundario;
+const principalAntesPel = dm.data.financeiro.caixaPrincipal;
+dm.venderPelicula('iPhone 13', 'Frente', 25, 'hd_hidrogel', 'Cliente Película PIX', 'caixaPrincipal');
+assert(dm.data.financeiro.caixaSecundario === gavetaAntesPel, `Película paga no PIX NÃO somou na gaveta física`);
+assert(dm.data.financeiro.caixaPrincipal === principalAntesPel + 25, `Película paga no PIX somou no caixaPrincipal (+R$ 25)`);
+
+// TESTE 12: Verificação de ausência do nome "Ilanna" nas telas de atendimento e HTMLs
+const arquivosVisiveis = ['index.html', 'cesinha-vendedor.html', 'js/ui-vendedor.js', 'js/ui-vendedor-fluxos.js', 'js/ui-venda-avulsa.js', 'js/ui-tabela-precos.js'];
+let ocorrenciasIlannaUI = 0;
+for (const arq of arquivosVisiveis) {
+    const conteudo = fs.readFileSync(path.join(__dirname, arq), 'utf8');
+    // Ignora chaves técnicas de retrocompatibilidade e classes CSS/comentários internos
+    const limpo = conteudo
+        .replace(/\/\/.*$/gm, '')
+        .replace(/comissaoIlannaMensal/g, '')
+        .replace(/comissaoIlannaHistorico/g, '')
+        .replace(/calcularComissaoIlannaReal/g, '')
+        .replace(/_obterWidgetMetaIlanna/g, '')
+        .replace(/barra-meta-ilanna/g, '')
+        .replace(/fecharTurnoIlanna/g, '')
+        .replace(/_confirmarSangriaIlanna/g, '');
+    if (/ilanna/i.test(limpo)) {
+        ocorrenciasIlannaUI++;
+        console.error(`Aviso: 'Ilanna' encontrado em ${arq}`);
+    }
+}
+assert(ocorrenciasIlannaUI === 0, `Zero ocorrências visíveis do nome "Ilanna" nos arquivos de interface e fluxo vendedor`);
+
 console.log('\n=================================================================');
 console.log(`🎯 RESULTADO FINAL: ${passados} / ${total} TESTES PASSARAM COM SUCESSO!`);
 console.log('=================================================================');

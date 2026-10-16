@@ -164,10 +164,10 @@ class DataManager {
 
     calcularComissaoIlanna(modo = 'liquida', meta = 2400) {
         const vendasHist = this.data.historico?.vendas || [];
-        const vendasIlanna = vendasHist.filter(v => (v.vendedor || '').toLowerCase().includes('ilanna') || v._modo === 'vendedor');
+        const vendasIlanna = vendasHist.filter(v => /(ilanna|atendente|vendedor)/i.test(v.vendedor || '') || v._modo === 'vendedor');
         const totalBruto = vendasIlanna.reduce((s, v) => s + (v.valorVenda || v.valorFinal || v.valor || 0), 0);
         const totalCusto = vendasIlanna.reduce((s, v) => s + (v.custo || 0), 0);
-        const fiadosPendentes = (this.data.crediarios || []).filter(c => (c.vendedor || '').toLowerCase().includes('ilanna') && c.status === 'inadimplente').reduce((s, c) => s + (c.valorTotal - (c.valorPago || 0)), 0);
+        const fiadosPendentes = (this.data.crediarios || []).filter(c => /(ilanna|atendente|vendedor)/i.test(c.vendedor || '') && c.status === 'inadimplente').reduce((s, c) => s + (c.valorTotal - (c.valorPago || 0)), 0);
 
         const baseCalculo = modo === 'bruta' ? totalBruto : Math.max(0, totalBruto - totalCusto - fiadosPendentes);
         const atingiuMeta = baseCalculo >= meta;
@@ -2685,7 +2685,7 @@ class DataManager {
             } else {
                 // CAIXA SECUNDÁRIO = GAVETA FÍSICA DA LOJA
                 // Vendas em dinheiro entram integralmente na gaveta física
-                const isDinheiro = (tipo || '').includes('avista') || (tipo || '').includes('dinheiro') || (caixaDestino === 'caixaSecundario');
+                const isDinheiro = (caixaDestino === 'caixaSecundario') || ((tipo || '').includes('dinheiro')) || (!caixaDestino && (tipo || '').includes('avista'));
                 if (isDinheiro) {
                     this.data.financeiro.caixaSecundario += valorTotal;
                 }
@@ -2876,7 +2876,8 @@ class DataManager {
     // ===== ORDEM DE SERVIÇO (ASSISTÊNCIA TÉCNICA) =====
     criarOrdemServico(os) {
         const num = this.data.assistencia.proximoNumero;
-        const valorFinal = parseFloat(os.valorFinal || os.preco || 0);
+        const valorFinal = parseFloat(os.valorFinal || os.preco || os.valorOrcamento || 0);
+        const valorEntrada = parseFloat(os.entrada || os.valorEntrada || 0);
         const custoPeca = os.custoPeca !== undefined ? parseFloat(os.custoPeca) : (os.custoTotal !== undefined ? parseFloat(os.custoTotal) : (os.custoInterno !== undefined ? parseFloat(os.custoInterno) : Math.round(valorFinal * 0.35 * 100) / 100));
         const nova = {
             numero: num,
@@ -2888,22 +2889,22 @@ class DataManager {
             preco: valorFinal,
             dataCriacao: new Date().toISOString(),
             status: os.status || 'aguardando_peca',
-            pago: os.entrada || 0,
-            restante: valorFinal - (os.entrada || 0)
+            pago: valorEntrada,
+            restante: valorFinal - valorEntrada
         };
         this.data.assistencia.ordensServico.push(nova);
         this.data.assistencia.proximoNumero = num + 1;
         
-        const valorEntrada = os.entrada || 0;
         if (valorEntrada > 0) {
             const propEntrada = valorFinal > 0 ? (valorEntrada / valorFinal) : 1;
             const custoEntrada = Math.round(custoPeca * propEntrada * 100) / 100;
+            const formaEnt = (os.formaPagamentoEntrada || 'dinheiro').toLowerCase();
             this._registrarSincronizacaoFinanceira({
                 tipo: 'os_entrada',
                 produto: `OS #${num} (Entrada): ${os.servico} — ${os.modelo}`,
                 valorVenda: valorEntrada,
                 custo: custoEntrada,
-                caixaDestino: 'caixaSecundario',
+                caixaDestino: formaEnt === 'dinheiro' ? 'caixaSecundario' : 'caixaPrincipal',
                 cliente: os.cliente
             });
         }

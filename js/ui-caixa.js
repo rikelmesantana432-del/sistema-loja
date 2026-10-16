@@ -429,10 +429,9 @@ UI._confirmarSangriaBalcao = function () {
     dataManager.saveData();
     UI.closeModal();
     UI.toast(`✅ Sangria de ${UI.R(valor)} transferida para o Caixa Terciário (Pai)!`, 'success');
-};
-UI._confirmarSangriaIlanna = UI._confirmarSangriaBalcao;
     UI.render();
 };
+UI._confirmarSangriaIlanna = UI._confirmarSangriaBalcao;
 
 // === RENDERIZAR TELA DE CAIXA COMPLETA DA LOJA ===
 UI.renderCaixa = function () {
