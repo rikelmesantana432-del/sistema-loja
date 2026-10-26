@@ -275,6 +275,17 @@ const bkpRaw = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
 assert(Array.isArray(bkpRaw.produtosProcurados) && bkpRaw.produtosProcurados.length === 21, `Backup 2026-10-23 contém todos os 21 pedidos/produtos procurados recuperados`);
 assert(bkpRaw.clientes.length >= 390 && bkpRaw.historico.vendas.length >= 560, `Backup 2026-10-23 contém base histórica completa (${bkpRaw.clientes.length} clientes, ${bkpRaw.historico.vendas.length} vendas)`);
 
+
+// TESTE 16: Correção de Preço Justo de Consertos Blindada contra Sobrescrita de Backup Antigo
+const orcIp11 = Calculators.getOrcamentoServico('iPhone 11', 'tela');
+assert(orcIp11.custoPeca === 130 && orcIp11.ideal === 300, `iPhone 11 Tela com Preço Justo corrigido (Custo Peça: R$ ${orcIp11.custoPeca} | Venda Ideal: R$ ${orcIp11.ideal})`);
+const orcA14 = Calculators.getOrcamentoServico('Samsung A14', 'tela');
+assert(orcA14.custoPeca === 120 && orcA14.ideal === 280, `Samsung A14 Tela com Preço Justo corrigido (Custo Peça: R$ ${orcA14.custoPeca} | Venda Ideal: R$ ${orcA14.ideal})`);
+const orcA15 = Calculators.getOrcamentoServico('Samsung A15', 'tela');
+assert(orcA15.custoPeca === 115 && orcA15.ideal === 270, `Samsung A15 Tela cadastrado com Preço Justo (Custo Peça: R$ ${orcA15.custoPeca} | Venda Ideal: R$ ${orcA15.ideal})`);
+const totalModelosCatalogo = Object.keys(dm.data.tabelaServicosModelo || {}).length;
+assert(totalModelosCatalogo >= 130, `Catálogo expandido de consertos com ${totalModelosCatalogo} modelos ativos`);
+
 console.log('\n=================================================================');
 console.log(`🎯 RESULTADO FINAL: ${passados} / ${total} TESTES PASSARAM COM SUCESSO!`);
 console.log('=================================================================');

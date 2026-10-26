@@ -614,7 +614,58 @@ class DataManager {
                 'xiaomi redmi note 10': { tela: { p: 120, m: 60, d: 5 }, tela2aLinha: { p: 90, m: 50, d: 4 }, telaOriginal: { p: 220, m: 75, d: 6 }, bateria: { p: 70, m: 50, d: 3 } },
                 'xiaomi redmi note 11': { tela: { p: 135, m: 60, d: 5 }, tela2aLinha: { p: 100, m: 52, d: 4 }, telaOriginal: { p: 250, m: 80, d: 6 }, bateria: { p: 75, m: 50, d: 3 } },
                 'xiaomi poco x3': { tela: { p: 145, m: 62, d: 5 }, tela2aLinha: { p: 105, m: 55, d: 4 }, telaOriginal: { p: 270, m: 85, d: 6 }, bateria: { p: 80, m: 55, d: 3 } },
-                'xiaomi poco m3': { tela: { p: 105, m: 60, d: 4 }, tela2aLinha: { p: 80, m: 45, d: 3 }, telaOriginal: { p: 190, m: 68, d: 5 }, bateria: { p: 65, m: 50, d: 2 } }
+                                'xiaomi poco m3': { tela: { p: 105, m: 60, d: 4 }, tela2aLinha: { p: 80, m: 45, d: 3 }, telaOriginal: { p: 190, m: 68, d: 5 }, bateria: { p: 65, m: 50, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                // === MODELOS POPULARES 2024-2026 COM PREÇO JUSTO REVISADO ===
+                'samsung a05': { tela: { p: 90, m: 50, d: 3 }, bateria: { p: 55, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'samsung a05s': { tela: { p: 95, m: 50, d: 3 }, bateria: { p: 60, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'samsung a06': { tela: { p: 100, m: 55, d: 3 }, bateria: { p: 60, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'samsung a15': { tela: { p: 115, m: 60, d: 3 }, bateria: { p: 65, m: 45, d: 2 }, conector: { p: 40, m: 40, d: 2 } },
+                'samsung a22': { tela: { p: 115, m: 60, d: 3 }, bateria: { p: 65, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'samsung a23': { tela: { p: 115, m: 60, d: 3 }, bateria: { p: 65, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'samsung a24': { tela: { p: 125, m: 60, d: 3 }, bateria: { p: 65, m: 45, d: 2 }, conector: { p: 40, m: 40, d: 2 } },
+                'samsung a25': { tela: { p: 135, m: 65, d: 3 }, bateria: { p: 70, m: 50, d: 2 }, conector: { p: 40, m: 40, d: 2 } },
+                'samsung a30': { tela: { p: 115, m: 55, d: 3 }, bateria: { p: 60, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'samsung a30s': { tela: { p: 115, m: 55, d: 3 }, bateria: { p: 60, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'samsung a33': { tela: { p: 155, m: 65, d: 4 }, bateria: { p: 75, m: 50, d: 2 }, conector: { p: 40, m: 40, d: 2 } },
+                'samsung a34': { tela: { p: 165, m: 70, d: 4 }, bateria: { p: 75, m: 50, d: 2 }, conector: { p: 45, m: 40, d: 2 } },
+                'samsung a35': { tela: { p: 185, m: 75, d: 4 }, bateria: { p: 80, m: 50, d: 2 }, conector: { p: 45, m: 45, d: 2 } },
+                'samsung a50': { tela: { p: 130, m: 60, d: 3 }, bateria: { p: 65, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'samsung a55': { tela: { p: 220, m: 80, d: 4 }, bateria: { p: 85, m: 55, d: 2 }, conector: { p: 50, m: 45, d: 2 } },
+                'moto e13': { tela: { p: 85, m: 50, d: 3 }, bateria: { p: 55, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'moto e20': { tela: { p: 85, m: 50, d: 3 }, bateria: { p: 55, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'moto e22': { tela: { p: 90, m: 50, d: 3 }, bateria: { p: 55, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'moto e32': { tela: { p: 95, m: 50, d: 3 }, bateria: { p: 60, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'moto g04': { tela: { p: 90, m: 50, d: 3 }, bateria: { p: 55, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'moto g05': { tela: { p: 95, m: 55, d: 3 }, bateria: { p: 60, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'moto g06': { tela: { p: 100, m: 55, d: 3 }, bateria: { p: 60, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'moto g14': { tela: { p: 100, m: 55, d: 3 }, bateria: { p: 60, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'moto g22': { tela: { p: 95, m: 55, d: 3 }, bateria: { p: 60, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'moto g23': { tela: { p: 100, m: 55, d: 3 }, bateria: { p: 60, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'moto g24': { tela: { p: 100, m: 55, d: 3 }, bateria: { p: 60, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'moto g31': { tela: { p: 115, m: 60, d: 3 }, bateria: { p: 65, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'moto g32': { tela: { p: 105, m: 55, d: 3 }, bateria: { p: 65, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'moto g34': { tela: { p: 110, m: 60, d: 3 }, bateria: { p: 65, m: 45, d: 2 }, conector: { p: 40, m: 35, d: 2 } },
+                'moto g42': { tela: { p: 120, m: 60, d: 3 }, bateria: { p: 65, m: 45, d: 2 }, conector: { p: 40, m: 35, d: 2 } },
+                'moto g52': { tela: { p: 125, m: 60, d: 3 }, bateria: { p: 65, m: 45, d: 2 }, conector: { p: 40, m: 35, d: 2 } },
+                'moto g53': { tela: { p: 115, m: 60, d: 3 }, bateria: { p: 65, m: 45, d: 2 }, conector: { p: 40, m: 35, d: 2 } },
+                'moto g54': { tela: { p: 120, m: 60, d: 3 }, bateria: { p: 65, m: 45, d: 2 }, conector: { p: 40, m: 40, d: 2 } },
+                'moto g84': { tela: { p: 165, m: 70, d: 4 }, bateria: { p: 75, m: 50, d: 2 }, conector: { p: 45, m: 40, d: 2 } },
+                'xiaomi redmi 9c': { tela: { p: 85, m: 50, d: 3 }, bateria: { p: 55, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'xiaomi redmi 10c': { tela: { p: 90, m: 50, d: 3 }, bateria: { p: 60, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'xiaomi redmi 12': { tela: { p: 105, m: 55, d: 3 }, bateria: { p: 65, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'xiaomi redmi 12c': { tela: { p: 85, m: 50, d: 3 }, bateria: { p: 55, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'xiaomi redmi 13c': { tela: { p: 90, m: 50, d: 3 }, bateria: { p: 60, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'xiaomi redmi a3': { tela: { p: 85, m: 50, d: 3 }, bateria: { p: 55, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'xiaomi redmi a5': { tela: { p: 90, m: 50, d: 3 }, bateria: { p: 55, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'xiaomi redmi note 12': { tela: { p: 125, m: 60, d: 3 }, bateria: { p: 70, m: 50, d: 2 }, conector: { p: 40, m: 40, d: 2 } },
+                'xiaomi redmi note 13': { tela: { p: 140, m: 65, d: 4 }, bateria: { p: 75, m: 50, d: 2 }, conector: { p: 45, m: 40, d: 2 } },
+                'xiaomi redmi note 14': { tela: { p: 160, m: 70, d: 4 }, bateria: { p: 80, m: 50, d: 2 }, conector: { p: 45, m: 45, d: 2 } },
+                'xiaomi redmi note 15': { tela: { p: 175, m: 75, d: 4 }, bateria: { p: 85, m: 55, d: 2 }, conector: { p: 45, m: 45, d: 2 } },
+                'xiaomi poco c65': { tela: { p: 90, m: 50, d: 3 }, bateria: { p: 60, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'xiaomi poco x5': { tela: { p: 145, m: 65, d: 4 }, bateria: { p: 75, m: 50, d: 2 }, conector: { p: 40, m: 40, d: 2 } },
+                'xiaomi poco x6': { tela: { p: 165, m: 70, d: 4 }, bateria: { p: 80, m: 50, d: 2 }, conector: { p: 45, m: 40, d: 2 } },
+                'realme c53': { tela: { p: 95, m: 55, d: 3 }, bateria: { p: 60, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } },
+                'realme c55': { tela: { p: 100, m: 55, d: 3 }, bateria: { p: 60, m: 45, d: 2 }, conector: { p: 35, m: 35, d: 2 } }
             },
 
             // Fallback por marca (se modelo exato não encontrado)
@@ -834,24 +885,28 @@ class DataManager {
                 if (saved) {
                     try {
                         const pCheck = JSON.parse(saved);
-                        if (!pCheck._hidratadoBackup20261023) precisaHidratar = true;
+                        if (!pCheck._hidratadoBackup20261023_v2) precisaHidratar = true;
                     } catch (e) { precisaHidratar = true; }
                 }
                 if (precisaHidratar) {
                     const defData = this.getDefaultData();
                     const bkp = JSON.parse(JSON.stringify(window.INITIAL_BACKUP_DATA));
                     // Preservar a tabela expandida de peças de conserto do código novo + customizações do backup
-                    bkp.tabelaServicosModelo = { ...(defData.tabelaServicosModelo || {}), ...(bkp.tabelaServicosModelo || {}) };
-                    bkp.tabelaServicosMarca = { ...(defData.tabelaServicosMarca || {}), ...(bkp.tabelaServicosMarca || {}) };
+                    bkp.tabelaServicosModelo = { ...(bkp.tabelaServicosModelo || {}), ...(defData.tabelaServicosModelo || {}) };
+                    bkp.tabelaServicosMarca = { ...(bkp.tabelaServicosMarca || {}), ...(defData.tabelaServicosMarca || {}) };
                     bkp.tabelaPeliculasModelo = { ...(defData.tabelaPeliculasModelo || {}), ...(bkp.tabelaPeliculasModelo || {}) };
                     bkp._hidratadoBackup20261023 = true;
+                    bkp._hidratadoBackup20261023_v2 = true;
                     saved = JSON.stringify(bkp);
                     try { localStorage.setItem(this.storageKey, saved); } catch (e) {}
                 }
             }
             if (saved) {
                 const parsed = JSON.parse(saved);
-                const merged = this._merge(this.getDefaultData(), parsed);
+                const defRef = this.getDefaultData();
+                const merged = this._merge(defRef, parsed);
+                merged.tabelaServicosModelo = { ...(parsed.tabelaServicosModelo || {}), ...(defRef.tabelaServicosModelo || {}) };
+                merged.tabelaServicosMarca = { ...(parsed.tabelaServicosMarca || {}), ...(defRef.tabelaServicosMarca || {}) };
                 if (!merged.fundoCustoEstoque) merged.fundoCustoEstoque = { totalAcumulado: 0, historicoCusto: [] };
                 if (!merged.fundoReposicaoFogos) merged.fundoReposicaoFogos = { totalAcumulado: 0, saldoGuardado: 0, historicoCusto: [], historicoMovimentacoes: [] };
                 if (!merged.divisaoLucro) merged.divisaoLucro = { totalLucroAcumulado: 0, porcentagemLoja: 40, porcentagemPai: 60, acumuladoLoja40: 0, acumuladoPai60: 0, historicoDivisao: [] };
@@ -2060,10 +2115,11 @@ class DataManager {
         }
         const defData = this.getDefaultData();
         const bkp = JSON.parse(JSON.stringify(window.INITIAL_BACKUP_DATA));
-        bkp.tabelaServicosModelo = { ...(defData.tabelaServicosModelo || {}), ...(bkp.tabelaServicosModelo || {}) };
-        bkp.tabelaServicosMarca = { ...(defData.tabelaServicosMarca || {}), ...(bkp.tabelaServicosMarca || {}) };
+        bkp.tabelaServicosModelo = { ...(bkp.tabelaServicosModelo || {}), ...(defData.tabelaServicosModelo || {}) };
+        bkp.tabelaServicosMarca = { ...(bkp.tabelaServicosMarca || {}), ...(defData.tabelaServicosMarca || {}) };
         bkp.tabelaPeliculasModelo = { ...(defData.tabelaPeliculasModelo || {}), ...(bkp.tabelaPeliculasModelo || {}) };
         bkp._hidratadoBackup20261023 = true;
+                    bkp._hidratadoBackup20261023_v2 = true;
         this.data = this._merge(defData, bkp);
         this.saveData();
         return { sucesso: true };
@@ -3742,7 +3798,9 @@ class DataManager {
                 // Financeiro: quem tem timestamp mais recente vence.
                 // Se local estiver vazio (localStorage limpou), nuvem restaura tudo.
                 // ============================================================
-                const mergedData = this._merge(this.getDefaultData(), cloudPayload);
+                const defCloud = this.getDefaultData();
+                const mergedData = this._merge(defCloud, cloudPayload);
+                mergedData.tabelaServicosModelo = { ...(cloudPayload.tabelaServicosModelo || {}), ...(defCloud.tabelaServicosModelo || {}), ...(this.data.tabelaServicosModelo || {}) };
                 const localTemDados = this.data._ultimoSaveLocal && this.data._ultimoSaveLocal > 0;
 
                 // === FUNÇÃO AUXILIAR: Merge por ID — mantém a UNIÃO dos dois ===
