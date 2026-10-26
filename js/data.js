@@ -827,7 +827,28 @@ class DataManager {
     // ===== CARREGAR E SALVAR =====
     loadData() {
         try {
-            const saved = localStorage.getItem(this.storageKey);
+            let saved = localStorage.getItem(this.storageKey);
+            // Se não houver localStorage ou ainda não tiver sido hidratado com o backup oficial de 23/10/2026:
+            if (typeof window !== 'undefined' && window.INITIAL_BACKUP_DATA) {
+                let precisaHidratar = !saved;
+                if (saved) {
+                    try {
+                        const pCheck = JSON.parse(saved);
+                        if (!pCheck._hidratadoBackup20261023) precisaHidratar = true;
+                    } catch (e) { precisaHidratar = true; }
+                }
+                if (precisaHidratar) {
+                    const defData = this.getDefaultData();
+                    const bkp = JSON.parse(JSON.stringify(window.INITIAL_BACKUP_DATA));
+                    // Preservar a tabela expandida de peças de conserto do código novo + customizações do backup
+                    bkp.tabelaServicosModelo = { ...(defData.tabelaServicosModelo || {}), ...(bkp.tabelaServicosModelo || {}) };
+                    bkp.tabelaServicosMarca = { ...(defData.tabelaServicosMarca || {}), ...(bkp.tabelaServicosMarca || {}) };
+                    bkp.tabelaPeliculasModelo = { ...(defData.tabelaPeliculasModelo || {}), ...(bkp.tabelaPeliculasModelo || {}) };
+                    bkp._hidratadoBackup20261023 = true;
+                    saved = JSON.stringify(bkp);
+                    try { localStorage.setItem(this.storageKey, saved); } catch (e) {}
+                }
+            }
             if (saved) {
                 const parsed = JSON.parse(saved);
                 const merged = this._merge(this.getDefaultData(), parsed);
@@ -894,6 +915,29 @@ class DataManager {
                         merged.financeiro.caixaSecundario = 0;
                     }
                 }
+
+                // === AUTO-UNIFICAÇÃO E AUTO-CONEXÃO DO TELEGRAM ===
+                if (!merged.configuracoes) merged.configuracoes = {};
+                if (!merged.configIntegracoes) merged.configIntegracoes = {};
+                const defaultCfg = this.getDefaultData().configuracoes;
+                let savedTg = {};
+                try { savedTg = JSON.parse(localStorage.getItem('strategyos_telegram_config') || '{}'); } catch (e) {}
+
+                const tokenFinal = merged.configuracoes.telegramBotToken || merged.configIntegracoes.telegramToken || savedTg.botToken || defaultCfg.telegramBotToken;
+                const chatIdFinal = merged.configuracoes.telegramChatId || merged.configIntegracoes.telegramChatId || savedTg.chatId || defaultCfg.telegramChatId;
+                const equipeFinal = merged.configuracoes.telegramChatIdEquipe || savedTg.chatIdEquipe || defaultCfg.telegramChatIdEquipe;
+
+                merged.configuracoes.telegramBotToken = tokenFinal;
+                merged.configuracoes.telegramChatId = chatIdFinal;
+                merged.configuracoes.telegramChatIdEquipe = equipeFinal;
+                if (merged.configuracoes.telegramAutoVendas === undefined) merged.configuracoes.telegramAutoVendas = true;
+                if (merged.configuracoes.telegramAutoCaixa === undefined) merged.configuracoes.telegramAutoCaixa = true;
+                if (merged.configuracoes.telegramAutoFechamento === undefined) merged.configuracoes.telegramAutoFechamento = true;
+                if (merged.configuracoes.telegramAutoAlertas === undefined) merged.configuracoes.telegramAutoAlertas = true;
+
+                merged.configIntegracoes.telegramToken = tokenFinal;
+                merged.configIntegracoes.telegramChatId = chatIdFinal;
+                merged.configIntegracoes.telegramAutoDiario = merged.configuracoes.telegramAutoFechamento;
 
                 return merged;
             }
@@ -1312,6 +1356,10 @@ class DataManager {
         // Se for um ID numérico longo ou concatenated string
         if (/^\d{13,}$/.test(s)) return 0;
 
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+            const t = new Date(s + 'T12:00:00').getTime();
+            if (!isNaN(t) && t > 1577836800000 && t < 1988150400000) return t;
+        }
         if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
             const t = new Date(s).getTime();
             if (!isNaN(t) && t > 1577836800000 && t < 1988150400000) return t;
@@ -1765,14 +1813,7 @@ class DataManager {
             this.limparEstoqueVendido();
             this.saveData();
 
-            // Notificação instantânea Telegram a cada venda
-            try {
-                const agora = new Date();
-                const hora = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-                const dataStr = agora.toLocaleDateString('pt-BR');
-                const msgVenda = `🛍️ *VENDA REGISTRADA*\n⏰ ${hora} de ${dataStr}\n👤 Cliente: ${cliente || 'Não identificado'}\n📦 Produto: ${nomeComposto}\n💰 Valor: R$ ${(valorVendaTotal || 0).toFixed(2)}\n💳 Pagamento: ${pagamentos.map(p => p.forma || p.tipo || '').join(', ')}`;
-                this.enviarTelegram(msgVenda);
-            } catch(e) { /* silencioso — não interrompe a venda */ }
+            // Notificação enviada via _registrarSincronizacaoFinanceira
 
             return { sucesso: true };
         } catch (e) {
@@ -1807,14 +1848,7 @@ class DataManager {
         this._aprenderVenda(prod, valorVenda);
         this.saveData();
 
-        // Notificação instantânea Telegram
-        try {
-            const agora = new Date();
-            const hora = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-            const dataStr = agora.toLocaleDateString('pt-BR');
-            const msgVenda = `🛍️ *VENDA REGISTRADA*\n⏰ ${hora} de ${dataStr}\n👤 Cliente: ${cliente || 'Não identificado'}\n📦 Produto: ${prod.nome}\n💰 Valor: R$ ${(valorVenda || 0).toFixed(2)}\n💳 Pagamento: À Vista`;
-            this.enviarTelegram(msgVenda);
-        } catch(e) { /* silencioso */ }
+        // Notificação enviada via _registrarSincronizacaoFinanceira
 
         return { sucesso: true, produto: prod.nome, lucro, caixa: this.data.financeiro.caixaPrincipal };
     }
@@ -2019,20 +2053,92 @@ class DataManager {
         return Math.round(val * 0.35 * 100) / 100;
     }
 
-    // ===== INTEGRAÇÃO OFICIAL BOT TELEGRAM =====
-    async enviarTelegram(mensagem) {
-        const botToken = this.data.configuracoes?.telegramBotToken;
-        const chatIdDono = this.data.configuracoes?.telegramChatId;
-        const chatIdEquipe = this.data.configuracoes?.telegramChatIdEquipe;
+    // ===== INTEGRAÇÃO OFICIAL BOT TELEGRAM (100% AUTOMÁTICA E RESILIENTE) =====
+    restaurarBackupOficial20261023() {
+        if (typeof window === 'undefined' || !window.INITIAL_BACKUP_DATA) {
+            return { sucesso: false, erro: 'Backup inicial não encontrado.' };
+        }
+        const defData = this.getDefaultData();
+        const bkp = JSON.parse(JSON.stringify(window.INITIAL_BACKUP_DATA));
+        bkp.tabelaServicosModelo = { ...(defData.tabelaServicosModelo || {}), ...(bkp.tabelaServicosModelo || {}) };
+        bkp.tabelaServicosMarca = { ...(defData.tabelaServicosMarca || {}), ...(bkp.tabelaServicosMarca || {}) };
+        bkp.tabelaPeliculasModelo = { ...(defData.tabelaPeliculasModelo || {}), ...(bkp.tabelaPeliculasModelo || {}) };
+        bkp._hidratadoBackup20261023 = true;
+        this.data = this._merge(defData, bkp);
+        this.saveData();
+        return { sucesso: true };
+    }
 
-        if (!botToken || !chatIdDono) {
+    getConfigTelegram() {
+        const cfg = this.data?.configuracoes || {};
+        const cfgInt = this.data?.configIntegracoes || {};
+        let savedTg = {};
+        try { savedTg = JSON.parse(localStorage.getItem('strategyos_telegram_config') || '{}'); } catch (e) {}
+
+        const botToken = cfg.telegramBotToken || cfgInt.telegramToken || savedTg.botToken || '8881150678:AAEM162UqJGeZiZQCXEmrkSymXMqUBqee34';
+        const chatId = cfg.telegramChatId || cfgInt.telegramChatId || savedTg.chatId || '1969798643';
+        const chatIdEquipe = cfg.telegramChatIdEquipe !== undefined ? cfg.telegramChatIdEquipe : (savedTg.chatIdEquipe || '-5232346648');
+
+        return {
+            botToken,
+            chatId,
+            chatIdEquipe,
+            autoVendas: cfg.telegramAutoVendas !== false,
+            notificarVendas: cfg.telegramAutoVendas !== false,
+            notificarOS: cfg.telegramAutoVendas !== false,
+            autoCaixa: cfg.telegramAutoCaixa !== false,
+            autoFechamento: cfg.telegramAutoFechamento !== false,
+            autoAlertas: cfg.telegramAutoAlertas !== false
+        };
+    }
+
+    salvarConfigTelegram(dados = {}) {
+        if (!this.data.configuracoes) this.data.configuracoes = {};
+        if (!this.data.configIntegracoes) this.data.configIntegracoes = {};
+        const atual = this.getConfigTelegram();
+
+        const token = dados.botToken !== undefined ? String(dados.botToken).trim() : atual.botToken;
+        const chatId = dados.chatId !== undefined ? String(dados.chatId).trim() : atual.chatId;
+        const chatIdEquipe = dados.chatIdEquipe !== undefined ? String(dados.chatIdEquipe).trim() : atual.chatIdEquipe;
+
+        this.data.configuracoes.telegramBotToken = token;
+        this.data.configuracoes.telegramChatId = chatId;
+        this.data.configuracoes.telegramChatIdEquipe = chatIdEquipe;
+        if (dados.autoVendas !== undefined) this.data.configuracoes.telegramAutoVendas = Boolean(dados.autoVendas);
+        if (dados.autoCaixa !== undefined) this.data.configuracoes.telegramAutoCaixa = Boolean(dados.autoCaixa);
+        if (dados.autoFechamento !== undefined) this.data.configuracoes.telegramAutoFechamento = Boolean(dados.autoFechamento);
+        if (dados.autoAlertas !== undefined) this.data.configuracoes.telegramAutoAlertas = Boolean(dados.autoAlertas);
+
+        this.data.configIntegracoes.telegramToken = token;
+        this.data.configIntegracoes.telegramChatId = chatId;
+        this.data.configIntegracoes.telegramAutoDiario = this.data.configuracoes.telegramAutoFechamento;
+
+        try {
+            localStorage.setItem('strategyos_telegram_config', JSON.stringify({
+                botToken: token,
+                chatId,
+                chatIdEquipe
+            }));
+        } catch (e) {}
+
+        this.saveData();
+        return this.getConfigTelegram();
+    }
+
+    async enviarTelegram(mensagem, opcoes = {}) {
+        const { botToken, chatId, chatIdEquipe } = this.getConfigTelegram();
+
+        if (!botToken || !chatId) {
             console.warn('⚠️ [Telegram] Token ou Chat ID do Bot não configurados');
             return { sucesso: false, erro: 'Bot do Telegram não configurado.' };
         }
 
-        const targets = [chatIdDono];
-        if (chatIdEquipe && chatIdEquipe !== chatIdDono) targets.push(chatIdEquipe);
+        const targets = [chatId];
+        if (chatIdEquipe && chatIdEquipe !== chatId && opcoes.apenasDono !== true) {
+            targets.push(chatIdEquipe);
+        }
 
+        let algumSucesso = false;
         let ultimoRes = null;
         for (const idTarget of targets) {
             try {
@@ -2047,19 +2153,104 @@ class DataManager {
                     })
                 });
                 const data = await resp.json();
-                ultimoRes = { sucesso: data.ok, data };
+                if (data && data.ok) algumSucesso = true;
+                ultimoRes = { sucesso: Boolean(data && data.ok), data };
             } catch (e) {
-                console.error('Erro ao enviar mensagem no Telegram:', e);
+                console.warn('Aviso ao enviar mensagem no Telegram:', e.message || e);
             }
         }
-        return ultimoRes || { sucesso: false };
+
+        if (!algumSucesso && !opcoes.naoEnfileirar) {
+            if (!this.data.filaTelegramPendente) this.data.filaTelegramPendente = [];
+            this.data.filaTelegramPendente.push({
+                id: Date.now(),
+                mensagem,
+                data: new Date().toISOString()
+            });
+            if (this.data.filaTelegramPendente.length > 30) this.data.filaTelegramPendente.shift();
+            this.saveData();
+        }
+
+        return ultimoRes || { sucesso: algumSucesso };
+    }
+
+    async processarFilaTelegram() {
+        if (!this.data?.filaTelegramPendente || this.data.filaTelegramPendente.length === 0) return;
+        const fila = [...this.data.filaTelegramPendente];
+        this.data.filaTelegramPendente = [];
+        for (const item of fila) {
+            const res = await this.enviarTelegram(item.mensagem, { naoEnfileirar: true });
+            if (!res || !res.sucesso) {
+                this.data.filaTelegramPendente.push(item);
+            }
+        }
+        this.saveData();
+    }
+
+    iniciarPilotoAutomaticoTelegram() {
+        if (this._pilotoTelegramAtivo) return;
+        this._pilotoTelegramAtivo = true;
+
+        if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+            window.addEventListener('online', () => {
+                this.processarFilaTelegram();
+            });
+        }
+
+        const cicloAutomatico = async () => {
+            try {
+                await this.processarFilaTelegram();
+                const cfg = this.getConfigTelegram();
+                const hoje = this.hojeLocal();
+                const horaAtual = new Date().getHours();
+
+                // 1. Fechamento + Backup Automático às 18h (ou backup automático no 1º acesso do dia)
+                if (cfg.autoFechamento && horaAtual >= 18 && this.data.ultimoFechamentoAutoTelegram !== hoje) {
+                    const res = await this.enviarFechamentoDiarioTelegram();
+                    if (res && res.sucesso) {
+                        this.data.ultimoFechamentoAutoTelegram = hoje;
+                        this.data.ultimoBackupDiarioTelegram = hoje;
+                        this.saveData();
+                    }
+                } else if (cfg.autoFechamento && this.data.ultimoBackupDiarioTelegram !== hoje && horaAtual >= 9) {
+                    const resDoc = await this.enviarBackupDocumentoTelegram();
+                    if (resDoc && resDoc.sucesso) {
+                        this.data.ultimoBackupDiarioTelegram = hoje;
+                        this.saveData();
+                    }
+                }
+
+                // 2. Lembrete Diário Automático de Fiados Atrasados / Vencendo Hoje
+                if (cfg.autoAlertas && this.data.ultimoAlertaCriticoAutoTelegram !== hoje && horaAtual >= 8) {
+                    this.data.ultimoAlertaCriticoAutoTelegram = hoje;
+                    this.saveData();
+                    const fiadosAlerta = this.getFiadosAlerta();
+                    if ((fiadosAlerta.atrasados && fiadosAlerta.atrasados.length > 0) || (fiadosAlerta.hoje && fiadosAlerta.hoje.length > 0)) {
+                        let msgF = `🔔 *LEMBRETE AUTOMÁTICO DE FIADOS — ${new Date().toLocaleDateString('pt-BR')}*\n\n`;
+                        if (fiadosAlerta.atrasados.length > 0) {
+                            msgF += `🔴 *Atrasados (${fiadosAlerta.atrasados.length}):*\n` + fiadosAlerta.atrasados.map(f => `• ${f.cliente}: R$ ${Number(f.valor || 0).toFixed(2)} (${f.produto})`).join('\n') + `\n\n`;
+                        }
+                        if (fiadosAlerta.hoje.length > 0) {
+                            msgF += `🟡 *Cobrar Hoje (${fiadosAlerta.hoje.length}):*\n` + fiadosAlerta.hoje.map(f => `• ${f.cliente}: R$ ${Number(f.valor || 0).toFixed(2)} (${f.produto})`).join('\n');
+                        }
+                        await this.enviarTelegram(msgF.trim());
+                    }
+                }
+            } catch (e) {
+                console.warn('[Telegram AutoPilot]', e);
+            }
+        };
+
+        setTimeout(cicloAutomatico, 4000);
+        this._intervaloPilotoTelegram = setInterval(cicloAutomatico, 10 * 60 * 1000);
     }
 
     async verificarBackupDiarioTelegram() {
-        const hoje = new Date().toISOString().substring(0, 10);
+        const hoje = this.hojeLocal();
         if (this.data.ultimoBackupDiarioTelegram === hoje) return;
 
-        if (!this.data.configuracoes?.telegramBotToken) return;
+        const { botToken } = this.getConfigTelegram();
+        if (!botToken) return;
 
         const res = await this.enviarResumoDiarioTelegram();
         if (res.sucesso) {
@@ -2070,9 +2261,10 @@ class DataManager {
     }
 
     async enviarResumoDiarioTelegram() {
-        if (!this.data.configuracoes?.telegramBotToken) return { sucesso: false, erro: 'Bot não configurado' };
+        const { botToken } = this.getConfigTelegram();
+        if (!botToken) return { sucesso: false, erro: 'Bot não configurado' };
 
-        const hojeStr = new Date().toISOString().substring(0, 10);
+        const hojeStr = this.hojeLocal();
         const dataFormatada = new Date().toLocaleDateString('pt-BR');
 
         // Vendas do dia
@@ -2115,14 +2307,23 @@ class DataManager {
     }
 
     // ===== NOTIFICAÇÃO INSTANTÂNEA DE VENDA VIA TELEGRAM =====
-    async enviarNotificacaoVendaTelegram(prodNome, valorVenda, pagamento = 'À Vista', cliente = '') {
-        if (!this.data.configuracoes?.telegramBotToken) return;
+    async enviarNotificacaoVendaTelegram(prodNome, valorVenda, pagamento = 'À Vista', cliente = '', detalhesExtras = {}) {
+        const cfg = this.getConfigTelegram();
+        if (!cfg.botToken || !cfg.autoVendas) return;
+
+        const val = Number(valorVenda || 0);
+        const custo = Number(detalhesExtras.custo || 0);
+        const lucro = detalhesExtras.lucro !== undefined ? Number(detalhesExtras.lucro) : Math.max(0, val - custo);
+        const gavetaAtual = Number(this.data.financeiro?.caixaSecundario || 0);
+
         const msg = `🎉 *NOVA VENDA REGISTRADA! — CESINHA ACESSÓRIOS*\n\n` +
             `📦 *Produto*: ${prodNome}\n` +
-            `💰 *Valor*: R$ ${Number(valorVenda || 0).toFixed(2)}\n` +
-            `💳 *Forma Pagamento*: ${pagamento}\n` +
+            `💰 *Valor Venda*: *R$ ${val.toFixed(2)}*\n` +
+            (custo > 0 ? `🏷️ *Custo (CMV)*: R$ ${custo.toFixed(2)} | 💎 *Lucro*: *R$ ${lucro.toFixed(2)}*\n` : '') +
+            `🏦 *Destino / Pagto*: ${pagamento}\n` +
             `👤 *Cliente*: ${cliente || 'Consumidor Geral'}\n` +
-            `⏰ *Hora*: ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+            `💵 *Saldo Gaveta Após Venda*: R$ ${gavetaAtual.toFixed(2)}\n` +
+            `⏰ *Hora*: ${this.horaLocal ? this.horaLocal() : new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
         await this.enviarTelegram(msg);
     }
 
@@ -2357,14 +2558,15 @@ class DataManager {
     }
 
     async enviarBackupDocumentoTelegram(chatIdTarget = null) {
-        const botToken = this.data.configuracoes?.telegramBotToken;
-        const chatId = chatIdTarget || this.data.configuracoes?.telegramChatId;
+        const cfg = this.getConfigTelegram();
+        const botToken = cfg.botToken;
+        const chatId = chatIdTarget || cfg.chatId;
 
         if (!botToken || !chatId) return { sucesso: false, erro: 'Bot do Telegram não configurado. Adicione o Token nas configurações.' };
 
         try {
             const dataStr = this.exportarDados();
-            const dataAtual = new Date().toISOString().substring(0, 10);
+            const dataAtual = this.hojeLocal();
             const fileName = `StrategyOS_Backup_Cesinha_${dataAtual}.json`;
 
             const blob = new Blob([dataStr], { type: 'application/json' });
@@ -2594,16 +2796,24 @@ class DataManager {
             });
         }
 
-        // Disparo Automático Instantâneo para o Telegram
+        // Disparo Automático Instantâneo para o Telegram (com destino real e lucro líquido)
         try {
             if (typeof this.enviarNotificacaoVendaTelegram === 'function' && valorTotal > 0) {
                 const tipoFormatado = (tipo || 'venda').replace('venda_', '').replace('os_', 'OS ').toUpperCase();
-                this.enviarNotificacaoVendaTelegram(
-                    `[${tipoFormatado}] ${produto || 'Produto/Serviço'}`,
-                    valorTotal,
-                    'Caixa / Cartão',
-                    cliente || 'Consumidor Geral'
-                );
+                const labelDestino = caixaDestino === 'caixaSecundario' ? '💵 Dinheiro (Gaveta Física)'
+                    : caixaDestino === 'caixaPrincipal' ? '🏦 PIX / Cartão (Conta Principal)'
+                    : caixaDestino === 'caixaFogos' ? '🎇 Caixa de Fogos'
+                    : caixaDestino === 'caixaTerciario' ? '👨‍🦳 Caixa Terciário (Pai)'
+                    : '💵 Gaveta / Caixa';
+                setTimeout(() => {
+                    this.enviarNotificacaoVendaTelegram(
+                        `[${tipoFormatado}] ${produto || 'Produto/Serviço'}`,
+                        valorTotal,
+                        labelDestino,
+                        cliente || 'Consumidor Geral',
+                        { custo: valorCusto, lucro: lucroLiquido }
+                    );
+                }, 50);
             }
         } catch (e) {
             console.warn('[Telegram] Falha ao enviar notificação instantânea:', e);
@@ -2910,7 +3120,21 @@ class DataManager {
         this.data._ultimoSaveLocal = Date.now();
         this.saveData();
         if (this.supabase) this.salvarSupabase();
-        return { sucesso: true };
+
+        try {
+            const cfg = this.getConfigTelegram();
+            if (cfg.botToken && cfg.autoCaixa) {
+                const msgEstorno = `🚨 *ALERTA DE ESTORNO / CANCELAMENTO NO CAIXA*\n\n` +
+                    `🗑️ *Item Estornado*: ${itemDesc || 'Movimentação'}\n` +
+                    `💰 *Valor Revertido*: R$ ${valVenda.toFixed(2)}\n` +
+                    `🏦 *Caixa Afetado*: ${caixaOrigem}\n` +
+                    `💵 *Saldo Atual Gaveta*: R$ ${Number(this.data.financeiro?.caixaSecundario || 0).toFixed(2)}\n` +
+                    `⏰ *Hora*: ${this.horaLocal ? this.horaLocal() : new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+                this.enviarTelegram(msgEstorno);
+            }
+        } catch (e) {}
+
+        return { sucesso: true, msg: 'Movimentação estornada com sucesso.' };
     }
 
     // ===== VENDER ACESSÓRIO =====
@@ -3166,6 +3390,17 @@ class DataManager {
             try { this.salvarSupabase(); } catch (e) { console.warn('Supabase sync despesa:', e); }
         }
         console.log(`[StrategyOS] Despesa registrada: R$ ${valNum.toFixed(2)} (${descricao}) no ${key}`);
+        try {
+            const cfg = this.getConfigTelegram();
+            if (cfg.botToken && cfg.autoCaixa) {
+                const msgDesp = `💸 *DESPESA / SAÍDA REGISTRADA NO CAIXA*\n\n` +
+                    `📝 *Motivo*: ${descricao || 'Despesa Avulsa'}\n` +
+                    `🔴 *Valor Saída*: -R$ ${valNum.toFixed(2)}\n` +
+                    `🏦 *Saiu de*: ${key === 'caixaSecundario' ? '💵 Gaveta Física' : key === 'caixaTerciario' ? '👨‍🦳 Caixa Terciário (Pai)' : '🏦 Caixa Principal'}\n` +
+                    `💵 *Saldo Atual Gaveta*: R$ ${Number(this.data.financeiro?.caixaSecundario || 0).toFixed(2)}`;
+                this.enviarTelegram(msgDesp);
+            }
+        } catch (e) {}
     }
 
     // ===== CLIENTES =====
@@ -3327,6 +3562,12 @@ class DataManager {
         fiado.status = 'pendente';
         this.data.fiados.push(fiado);
         this.saveData();
+        try {
+            const cfg = this.getConfigTelegram();
+            if (cfg.botToken && cfg.autoCaixa) {
+                this.enviarTelegram(`📝 *NOVA VENDA FIADO REGISTRADA*\n👤 Cliente: ${fiado.cliente}\n📦 Produto: ${fiado.produto}\n💰 Valor: R$ ${Number(fiado.valor || 0).toFixed(2)}\n📅 Cobrar em: ${fiado.dataCobrar || '-'}`);
+            }
+        } catch (e) {}
         return fiado;
     }
     receberFiado(id, formaPagamento = 'dinheiro') {
@@ -3345,6 +3586,7 @@ class DataManager {
 
         if (!this.data.movimentacoesCaixa) this.data.movimentacoesCaixa = [];
         this.data.movimentacoesCaixa.push({
+            id: Date.now(),
             data: new Date().toISOString(),
             tipo: 'recebimento_fiado',
             caixa: formaPagamento === 'dinheiro' ? 'caixaSecundario' : 'caixaPrincipal',
@@ -3354,11 +3596,17 @@ class DataManager {
         });
 
         this.saveData();
+        try {
+            const cfg = this.getConfigTelegram();
+            if (cfg.botToken && cfg.autoCaixa) {
+                this.enviarTelegram(`💵 *FIADO RECEBIDO!*\n👤 Cliente: ${f.cliente}\n📦 Produto: ${f.produto}\n💰 Valor: *R$ ${val.toFixed(2)}* (${formaPagamento.toUpperCase()})\n💵 Saldo Gaveta: R$ ${Number(this.data.financeiro?.caixaSecundario || 0).toFixed(2)}`);
+            }
+        } catch (e) {}
         return true;
     }
     getFiadosAlerta() {
-        const hoje = new Date().toISOString().split('T')[0];
-        const amanha = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+        const hoje = this.hojeLocal();
+        const amanha = this.hojeLocal(new Date(Date.now() + 86400000));
         const pendentes = (this.data.fiados || []).filter(f => f.status === 'pendente');
         return {
             hoje: pendentes.filter(f => f.dataCobrar === hoje),
@@ -3703,72 +3951,6 @@ class DataManager {
         return { sucesso: false };
     }
 
-    // ===== INTEGRAÇÃO COM TELEGRAM =====
-    async enviarTelegram(texto, customChatId = null) {
-        try {
-            const cfg = this.data.configuracoes || {};
-            const botToken = cfg.telegramBotToken || '8881150678:AAEM162UqJGeZiZQCXEmrkSymXMqUBqee34';
-            const chatId = customChatId || cfg.telegramChatId || '1969798643';
-
-            if (!botToken || !chatId) return { sucesso: false, erro: 'Token ou Chat ID não configurados' };
-
-            const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
-            const targets = customChatId ? [customChatId] : [chatId];
-            if (!customChatId && cfg.telegramChatIdEquipe && cfg.telegramChatIdEquipe !== chatId) {
-                targets.push(cfg.telegramChatIdEquipe);
-            }
-
-            let lastRes = { sucesso: true };
-            for (let target of targets) {
-                const resp = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        chat_id: target,
-                        text: texto,
-                        parse_mode: 'Markdown'
-                    })
-                });
-                const json = await resp.json();
-                if (!json.ok) lastRes = { sucesso: false, erro: json.description || 'Erro Telegram' };
-            }
-            return lastRes;
-        } catch (e) {
-            console.error('Erro no envio do Telegram:', e);
-            return { sucesso: false, erro: e.message };
-        }
-    }
-
-    async enviarBackupDocumentoTelegram() {
-        try {
-            const cfg = this.data.configuracoes || {};
-            const botToken = cfg.telegramBotToken || '8881150678:AAEM162UqJGeZiZQCXEmrkSymXMqUBqee34';
-            const chatId = cfg.telegramChatId || '1969798643';
-
-            if (!botToken || !chatId) return { sucesso: false, erro: 'Token ou Chat ID não configurados' };
-
-            const dataStr = this.exportarDados();
-            const dataHoje = new Date().toISOString().split('T')[0];
-            const fileName = `StrategyOS_Backup_JSON_${dataHoje}.json`;
-
-            const fileBlob = new Blob([dataStr], { type: 'application/json' });
-            const formData = new FormData();
-            formData.append('chat_id', chatId);
-            formData.append('caption', `📦 *BACKUP DIÁRIO DE DADOS* - ${dataHoje}`);
-            formData.append('document', fileBlob, fileName);
-
-            const url = `https://api.telegram.org/bot${botToken}/sendDocument`;
-            const resp = await fetch(url, { method: 'POST', body: formData });
-            const json = await resp.json();
-
-            if (json.ok) return { sucesso: true };
-            return { sucesso: false, erro: json.description || 'Erro ao enviar backup no Telegram' };
-        } catch (e) {
-            console.error('Erro no envio de backup via Telegram:', e);
-            return { sucesso: false, erro: e.message };
-        }
-    }
-
     async enviarZipSistemaTelegram() {
         try {
             const cfg = this.data.configuracoes || {};
@@ -3907,23 +4089,6 @@ class DataManager {
     }
 
 
-
-    async verificarEAlertarEstoqueBaixoTelegram() {
-        try {
-            const acessorios = (this.data.estoqueAcessorios || []).filter(a => a.tipo !== 'equipamento_loja' && a.quantidade !== undefined && a.quantidade <= 3);
-            if (acessorios.length === 0) return { sucesso: true, mensagem: 'Nenhum item com estoque baixo' };
-
-            let msg = `⚠️ *ALERTA DE REPOSIÇÃO DE ESTOQUE (<= 3 un.)*\n----------------------------------------\n`;
-            acessorios.forEach(a => {
-                msg += `• *${a.nome}*: ${a.quantidade} unidade(s) restante(s)\n`;
-            });
-            msg += `\n🛒 _Providenciar reposição com fornecedores._`;
-
-            return await this.enviarTelegram(msg);
-        } catch (e) {
-            return { sucesso: false, erro: e.message };
-        }
-    }
 
     // ===== AUDITORIA E RECÁLCULO DA COMISSÃO DE ILANNA (BASEADO EM VENDAS REAIS) =====
     calcularComissaoIlannaReal(mesAnoPrefix = null) {

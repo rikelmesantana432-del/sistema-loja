@@ -177,3 +177,25 @@ UI._peliculAIQExecutarBusca = function () {
         resultsArea.innerHTML = html;
     }, 250);
 };
+
+UI._vndEscolherPeliculaEspecial = function (modelo) {
+    if (!modelo) return;
+    if (!UI._clienteAtual) {
+        UI._clienteAtual = { nome: 'Consumidor Geral', telefone: '', pontos: 0, historico: [] };
+    }
+    const cat = dataManager.buscarCategoriaPelicula ? dataManager.buscarCategoriaPelicula(modelo) : 'basico';
+    const precos = (dataManager.data.precoPelicula && dataManager.data.precoPelicula[cat]) || { frontalHD: 39.9, frontalFosca: 49.9, traseira: 39.9, completa: 120 };
+    const custo = (dataManager.data.precoPelicula && dataManager.data.precoPelicula.custosReais) || { hd_hidrogel: 3, fosca: 3 };
+    UI._peliculaData = { modelo, cat, custos: custo };
+    UI._peliculaTipos = [
+        { key: 'frontalHD', nome: '📱 FRONTAL HD (brilho)', custoInt: custo.hd_hidrogel, preco: precos.frontalHD },
+        { key: 'frontalFosca', nome: '📱 FRONTAL FOSCA (anti-reflexo)', custoInt: custo.fosca, preco: precos.frontalFosca },
+        { key: 'traseira', nome: '📱 TRASEIRA', custoInt: custo.hd_hidrogel, preco: precos.traseira },
+        { key: 'completa', nome: '📱 COMPLETA (frente + verso)', custoInt: custo.hd_hidrogel * 2, preco: precos.completa }
+    ];
+    if (typeof UI._peliculaPasso3 === 'function') {
+        UI._peliculaPasso3('frontalHD');
+        UI.toast(`✅ Película compatível (${modelo}) selecionada!`, 'success');
+    }
+};
+

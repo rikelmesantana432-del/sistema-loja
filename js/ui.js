@@ -15,6 +15,9 @@ const UI = {
         this.render();
         dataManager.verificarInadimplencia();
         this._atualizarAlertas();
+        if (typeof dataManager.iniciarPilotoAutomaticoTelegram === 'function') {
+            dataManager.iniciarPilotoAutomaticoTelegram();
+        }
         
         // Alerta de deploy de teste
         const host = window.location.hostname;
@@ -48,11 +51,14 @@ const UI = {
 
         setTimeout(() => {
             this.paginaAtual = pagina;
-            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.nav-btn, .mob-nav-item').forEach(b => b.classList.remove('active'));
             const btn = document.querySelector(`.nav-btn[data-page="${pagina}"]`);
             if (btn) btn.classList.add('active');
-            // Fechar sidebar no mobile
+            const mobBtn = document.querySelector(`.mob-nav-item[data-page="${pagina}"]`);
+            if (mobBtn) mobBtn.classList.add('active');
+            // Fechar sidebar no mobile e voltar ao topo
             document.getElementById('sidebar')?.classList.remove('open');
+            try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {}
 
             try {
                 switch (pagina) {
@@ -424,13 +430,21 @@ const UI = {
     },
 
     // === MODAL ===
-    openModal(titulo, html) {
+    openModal(titulo, html, footerHtml) {
+        if (html === undefined && typeof titulo === 'string') {
+            html = titulo;
+            titulo = '🔔 StrategyOS 3.0';
+        }
+        if (footerHtml) {
+            html = `${html || ''}<div class="modal-footer" style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">${footerHtml}</div>`;
+        }
         const titleEl = document.getElementById('modal-title');
         const bodyEl = document.getElementById('modal-body');
         const overlay = document.getElementById('modal-overlay');
         if (titleEl) titleEl.textContent = titulo;
         if (bodyEl) bodyEl.innerHTML = html;
         if (overlay) {
+            overlay.style.display = '';
             overlay.classList.add('active');
             overlay.onclick = function(e) {
                 if (e.target === overlay) UI.closeModal();
@@ -438,15 +452,54 @@ const UI = {
         }
     },
 
+    showModal(titulo, html, footerHtml) {
+        return this.openModal(titulo, html, footerHtml);
+    },
+
+    modal(titulo, html, footerHtml) {
+        return this.openModal(titulo, html, footerHtml);
+    },
+
     closeModal() {
         const overlay = document.getElementById('modal-overlay');
         if (overlay) overlay.classList.remove('active');
     },
 
+    setContent(titulo, html) {
+        const main = document.getElementById('main-content');
+        if (main) {
+            main.innerHTML = `<div class="dashboard-section"><h2 style="margin-bottom:16px;">${titulo || ''}</h2>${html || ''}</div>`;
+        }
+    },
+
+    showToast(msg, tipo = 'info') {
+        return this.toast(msg, tipo);
+    },
+
+    novaOS(modeloPre = '', servicoPre = '', valorPre = '') {
+        if (typeof this.modalNovaOS === 'function') return this.modalNovaOS(modeloPre, servicoPre, valorPre);
+        if (typeof this._assistNovaOS === 'function') return this._assistNovaOS();
+        this.navigate('assistencia');
+    },
+
+    instalarAppPWA() {
+        if (window._deferredPWAPrompt) {
+            window._deferredPWAPrompt.prompt();
+        } else {
+            this.toast('📱 Para instalar: no menu do navegador, clique em "Adicionar à tela inicial" ou "Instalar aplicativo".', 'info');
+        }
+    },
+
     // === TOAST ===
     toast(msg, tipo = 'info') {
-        const container = document.getElementById('toast-container');
-        if (!container) return; // Segurança
+        let container = document.getElementById('toast-container');
+        if (!container && document.body) {
+            container = document.createElement('div');
+            container.id = 'toast-container';
+            container.className = 'toast-container';
+            document.body.appendChild(container);
+        }
+        if (!container) return;
         const toast = document.createElement('div');
         const icones = { success: '✅', error: '❌', info: 'ℹ️', warning: '⚠️' };
         toast.className = `toast toast-${tipo}`;

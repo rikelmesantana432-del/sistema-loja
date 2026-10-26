@@ -264,6 +264,17 @@ assert(dm.data.financeiro.caixaSecundario === 200, `Após estorno: Valor integra
 assert(dm.data.fundoCustoEstoque.saldoGuardado === 100, `Após estorno: Custo (R$ 40) foi revertido do Fundo de Reposição (esperado: 100, obtido: ${dm.data.fundoCustoEstoque.saldoGuardado})`);
 assert(dm.data.divisaoLucro.totalLucroAcumulado === 50, `Após estorno: Lucro Líquido (R$ 60) foi revertido da Divisão de Lucros (esperado: 50, obtido: ${dm.data.divisaoLucro.totalLucroAcumulado})`);
 
+
+// TESTE 15: Motor Unificado do Telegram + Hidratação do Backup 2026-10-23
+const tgCfg = dm.getConfigTelegram();
+assert(Boolean(tgCfg.botToken && tgCfg.chatId), `Configuração do Telegram unificada e pré-carregada com credenciais da loja`);
+assert(tgCfg.notificarVendas === true && tgCfg.notificarOS === true, `Piloto Automático do Telegram habilitado por padrão para Vendas e OS`);
+const backupPath = path.join(__dirname, 'backup_recuperado_2026-10-23.json');
+assert(fs.existsSync(backupPath), `Arquivo backup_recuperado_2026-10-23.json presente e íntegro no projeto`);
+const bkpRaw = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
+assert(Array.isArray(bkpRaw.produtosProcurados) && bkpRaw.produtosProcurados.length === 21, `Backup 2026-10-23 contém todos os 21 pedidos/produtos procurados recuperados`);
+assert(bkpRaw.clientes.length >= 390 && bkpRaw.historico.vendas.length >= 560, `Backup 2026-10-23 contém base histórica completa (${bkpRaw.clientes.length} clientes, ${bkpRaw.historico.vendas.length} vendas)`);
+
 console.log('\n=================================================================');
 console.log(`🎯 RESULTADO FINAL: ${passados} / ${total} TESTES PASSARAM COM SUCESSO!`);
 console.log('=================================================================');

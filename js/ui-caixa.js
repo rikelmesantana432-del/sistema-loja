@@ -1260,11 +1260,38 @@ UI.modalRelatorioLucroPorServico = function () {
                 </table>
             </div>
         </div>
-        <div class="modal-footer" style="display:flex;gap:8px;">
+        <div class="modal-footer" style="display:flex;gap:8px;flex-wrap:wrap;">
             <button class="btn btn-ghost btn-lg" onclick="UI.closeModal()">Fechar</button>
+            <button class="btn btn-lg" style="background:rgba(56,189,248,0.18);color:#38bdf8;border:1px solid rgba(56,189,248,0.35);font-weight:800;" onclick="UI._enviarRelatorioServicosTelegram()">✈️ Enviar Telegram</button>
             <button class="btn btn-primary btn-lg" onclick="UI._enviarRelatorioServicosWhatsApp()">📲 Enviar WhatsApp</button>
         </div>
     `);
+
+    UI._ultimoResumoServicos = cats;
+};
+
+UI._gerarTextoRelatorioServicos = function () {
+    const cats = UI._ultimoResumoServicos || [];
+    let msg = `📊 *LUCRO POR TIPO DE SERVIÇO — CESINHA ACESSÓRIOS*\n📅 Data: ${new Date().toLocaleDateString('pt-BR')}\n\n`;
+    cats.forEach(([nome, d]) => {
+        const lucro = Math.max(0, d.receita - d.custo);
+        const margem = d.receita > 0 ? ((lucro / d.receita) * 100).toFixed(1) : 0;
+        msg += `${d.icon} *${nome}* (${d.qtd}x)\n• Receita: ${UI.R(d.receita)} | Custo: ${UI.R(d.custo)}\n• Lucro: *${UI.R(lucro)}* (${margem}%)\n\n`;
+    });
+    return msg.trim();
+};
+
+UI._enviarRelatorioServicosWhatsApp = function () {
+    const texto = UI._gerarTextoRelatorioServicos();
+    window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank');
+};
+
+UI._enviarRelatorioServicosTelegram = async function () {
+    const texto = UI._gerarTextoRelatorioServicos();
+    UI.toast('✈️ Enviando relatório de serviços para o Telegram...', 'info');
+    const res = await dataManager.enviarTelegram(texto);
+    if (res && res.sucesso) UI.toast('✅ Relatório de serviços enviado para o Telegram!', 'success');
+    else UI.toast('⚠️ Relatório colocado na fila automática do Telegram.', 'info');
 };
 
 // === FECHAMENTO DE CAIXA / BATER CAIXA ===
@@ -1472,7 +1499,7 @@ UI._confirmarBaterCaixa = function (saldoEsperado) {
         diferenca: dif,
         status: Math.abs(dif) < 0.05 ? 'exato' : dif > 0 ? 'sobra' : 'falta',
         observacao: obs,
-        usuario: UI._clienteAtual ? UI._clienteAtual.nome : 'Funcionária'
+        usuario: UI._clienteAtual ? UI._clienteAtual.nome : 'Atendente / Loja'
     };
 
     dataManager.data.fechamentosCaixa.push(fechamento);
@@ -1480,6 +1507,7 @@ UI._confirmarBaterCaixa = function (saldoEsperado) {
     // Registrar no histórico de movimentações do caixa
     if (!dataManager.data.movimentacoesCaixa) dataManager.data.movimentacoesCaixa = [];
     dataManager.data.movimentacoesCaixa.push({
+        id: Date.now(),
         tipo: 'fechamento_caixa',
         valor: valorGaveta,
         diferenca: dif,
@@ -1491,7 +1519,20 @@ UI._confirmarBaterCaixa = function (saldoEsperado) {
     dataManager.saveData();
     if (dataManager.supabase) dataManager.salvarSupabase();
     
-    // Disparar relatório completo e backup do dia no Telegram ao fechar o caixa no final do dia
+    // Disparar conferência detalhada da gaveta + relatório completo e backup do dia no Telegram
+    const msgTelegramBater =
+        `⚖️ *CONFERÊNCIA DE GAVETA (BATER CAIXA) — CESINHA*\n` +
+        `📅 Data/Hora: ${new Date(dataHora).toLocaleString('pt-BR')}\n` +
+        `----------------------------------------\n` +
+        `💵 *Dinheiro Contado na Gaveta:* ${UI.R(valorGaveta)}\n` +
+        `📊 *Saldo Esperado no Sistema:* ${UI.R(saldoEsperado)}\n` +
+        `🎯 *Resultado:* ${Math.abs(dif) < 0.05 ? '✅ PERFEITO (EXATO)' : dif > 0 ? `📈 SOBRA de ${UI.R(dif)}` : `🚨 QUEBRA/FALTA de ${UI.R(Math.abs(dif))}`}\n` +
+        (valorMaquina > 0 ? `💳 *Comprovantes Cartão/PIX:* ${UI.R(valorMaquina)}\n` : '') +
+        (obs ? `📝 *Observações:* ${obs}\n` : '');
+
+    if (dataManager.enviarTelegram) {
+        dataManager.enviarTelegram(msgTelegramBater);
+    }
     if (dataManager.enviarFechamentoDiarioTelegram) {
         dataManager.enviarFechamentoDiarioTelegram();
     }

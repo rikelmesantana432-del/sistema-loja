@@ -1,8 +1,9 @@
-// StrategyOS PWA Service Worker v3.9.0
-const CACHE_NAME = 'strategyos-v3.9.0';
+// StrategyOS PWA Service Worker v10.8.0-mobile
+const CACHE_NAME = 'strategyos-v10.8.0-mobile';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
+  './cesinha-vendedor.html',
   './css/style.css',
   './manifest.json',
   './js/supabase-config.js',
@@ -15,6 +16,7 @@ const ASSETS_TO_CACHE = [
   './js/ui-trocas.js',
   './js/ui-trocas-form.js',
   './js/ui-assistencia.js',
+  './js/ui-tabela-precos.js',
   './js/ui-vendedor.js',
   './js/ui-vendedor-fluxos.js',
   './js/ui-venda-avulsa.js',
@@ -24,8 +26,12 @@ const ASSETS_TO_CACHE = [
   './js/ui-ia-sugestoes.js',
   './js/ui-fidelidade.js',
   './js/ui-estoque.js',
+  './js/ui-estoque-render.js',
+  './js/peliculaiq.js',
+  './js/ui-peliculaiq.js',
   './js/ui-melhorias.js',
   './js/ui-melhorias-2.js',
+  './js/integrations.js',
   './js/app.js'
 ];
 

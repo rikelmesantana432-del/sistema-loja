@@ -5,7 +5,7 @@ UI.renderFiado = function () {
     const alertas = dataManager.getFiadosAlerta();
     const pendentes = fiados.filter(f => f.status === 'pendente');
     const recebidos = fiados.filter(f => f.status === 'recebido');
-    const hoje = new Date().toISOString().split('T')[0];
+    const hoje = dataManager.hojeLocal ? dataManager.hojeLocal() : new Date().toISOString().split('T')[0];
 
     const statusBadge = (f) => {
         if (f.status === 'recebido') return '<span style="color:var(--accent-green)">✅ Recebido</span>';
@@ -94,7 +94,7 @@ UI._confirmarRecebimentoFiado = function (id, forma) {
 };
 
 UI._novoFiado = function () {
-    const hoje = new Date().toISOString().split('T')[0];
+    const hoje = dataManager.hojeLocal ? dataManager.hojeLocal() : new Date().toISOString().split('T')[0];
     const prazos = [
         { label: 'Até 7 dias (Sem juros)', dias: 7, juros: 0 },
         { label: 'Até 15 dias (+10% juros)', dias: 15, juros: 10 },
@@ -151,7 +151,8 @@ UI._previewEConfirmarFiado = function () {
     const jurosPct = parseFloat(prazoRadio.getAttribute('data-juros') || 0);
     const jurosValor = (valorOriginal * jurosPct) / 100;
     const valorFinal = valorOriginal + jurosValor;
-    const dataCobrar = new Date(Date.now() + dias * 86400000).toISOString().split('T')[0];
+    const dtCobrarObj = new Date(Date.now() + dias * 86400000);
+    const dataCobrar = dataManager.hojeLocal ? dataManager.hojeLocal(dtCobrarObj) : dtCobrarObj.toISOString().split('T')[0];
     const dataFormatada = new Date(dataCobrar + 'T12:00:00').toLocaleDateString('pt-BR');
 
     const html = `

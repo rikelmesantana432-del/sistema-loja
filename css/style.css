@@ -2351,3 +2351,175 @@ button, .btn, .nav-btn, .vendedor-btn, .reg-card, input, select, textarea {
         border-radius: 20px !important;
     }
 }
+
+/* === OTIMIZAÇÃO MOBILE COMPLETA (SMARTPHONE 390x844px — USO ONLINE NA LOJA) === */
+.mobile-bottom-nav {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    #cloud-status-badge {
+        display: none !important;
+    }
+
+    .app-header {
+        height: 54px !important;
+        padding: 0 10px !important;
+    }
+
+    .app-title {
+        font-size: 15px !important;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 175px;
+    }
+
+    .main-content {
+        margin-left: 0 !important;
+        padding: 12px 10px 84px 10px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        overflow-x: hidden !important;
+    }
+
+    .sidebar {
+        z-index: 10005 !important;
+        width: 265px !important;
+        box-shadow: 8px 0 30px rgba(0, 0, 0, 0.75) !important;
+        padding-bottom: 80px !important;
+    }
+
+    /* Barra Inferior Mobile estilo App Nativo */
+    .mobile-bottom-nav {
+        display: grid !important;
+        grid-template-columns: repeat(5, 1fr);
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 64px;
+        padding-bottom: env(safe-area-inset-bottom, 4px);
+        background: rgba(12, 16, 26, 0.96);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border-top: 1px solid rgba(255, 215, 0, 0.22);
+        z-index: 10002;
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.6);
+    }
+
+    .mob-nav-item {
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        padding: 4px 2px;
+        min-height: 54px !important;
+        cursor: pointer;
+        transition: transform 0.12s ease, color 0.15s ease;
+    }
+
+    .mob-nav-item:active {
+        transform: scale(0.94);
+    }
+
+    .mob-nav-icon {
+        font-size: 20px;
+        line-height: 1.1;
+    }
+
+    .mob-nav-label {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.2px;
+    }
+
+    .mob-nav-destaque {
+        color: #FFD700 !important;
+    }
+
+    .mob-nav-destaque .mob-nav-icon {
+        background: rgba(255, 215, 0, 0.18);
+        border: 1px solid rgba(255, 215, 0, 0.45);
+        border-radius: 12px;
+        padding: 3px 10px;
+    }
+
+    /* Grid do Modo Vendedor compacto em 2 colunas no celular para caber na tela sem rolar demais */
+    .vendedor-grid-3x2 {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 10px !important;
+        margin: 10px 0 !important;
+    }
+
+    .vendedor-grid-3x2 .vendedor-btn {
+        min-height: 104px !important;
+        padding: 12px 8px !important;
+        border-radius: 14px !important;
+    }
+
+    .vendedor-grid-3x2 .vendedor-btn .reg-card-icon,
+    .vendedor-grid-3x2 .vendedor-btn .vendedor-btn-icon {
+        font-size: 28px !important;
+    }
+
+    .vendedor-grid-3x2 .vendedor-btn .reg-card-title,
+    .vendedor-grid-3x2 .vendedor-btn .vendedor-btn-title {
+        font-size: 14px !important;
+        line-height: 1.2 !important;
+        text-align: center !important;
+    }
+
+    .vendedor-grid-3x2 .vendedor-btn .vendedor-btn-desc {
+        font-size: 11px !important;
+        line-height: 1.2 !important;
+    }
+
+    /* Grid de pagamentos no celular em 2 colunas práticas */
+    .vendedor-grid-pag {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 10px !important;
+    }
+
+    .vendedor-btn-pag {
+        padding: 14px 8px !important;
+        min-height: 95px !important;
+    }
+
+    /* Modais responsivos para 390px */
+    .modal-overlay {
+        padding: 8px !important;
+        align-items: flex-end !important;
+    }
+
+    .modal-content {
+        width: 100% !important;
+        max-width: 100vw !important;
+        max-height: 88vh !important;
+        margin: 0 auto !important;
+        padding: 14px 12px 22px 12px !important;
+        border-radius: 20px 20px 12px 12px !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+
+    .modal-footer {
+        flex-wrap: wrap !important;
+    }
+
+    .modal-footer .btn {
+        flex: 1 1 auto !important;
+    }
+
+    /* Tabelas com scroll horizontal suave no celular */
+    .priority-table, table {
+        display: block;
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+}

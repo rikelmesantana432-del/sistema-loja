@@ -66,9 +66,9 @@ ${prodsCriticos.length > 0 ? `🚨 Priorize a venda do modelo ${prodsCriticos[0]
 
     // === 2. DISPARAR BOT DO TELEGRAM ===
     async enviarTelegram(silencioso = false) {
-        const config = (dataManager.data.configIntegracoes || {});
-        const token = config.telegramToken;
-        const chatId = config.telegramChatId;
+        const cfgTg = dataManager.getConfigTelegram ? dataManager.getConfigTelegram() : {};
+        const token = cfgTg.botToken;
+        const chatId = cfgTg.chatId;
 
         if (!token || !chatId) {
             if (!silencioso) UI.toast('Configure o Token e Chat ID do Telegram nas configurações.', 'warning');
@@ -105,9 +105,9 @@ ${prodsCriticos.length > 0 ? `🚨 Priorize a venda do modelo ${prodsCriticos[0]
 
     // === 2B. ENVIAR BACKUP COMPLETO DO BANCO EM ARQUIVO PARA O TELEGRAM ===
     async enviarBackupTelegram(silencioso = false) {
-        const config = (dataManager.data.configIntegracoes || {});
-        const token = config.telegramToken;
-        const chatId = config.telegramChatId;
+        const cfgTg = dataManager.getConfigTelegram ? dataManager.getConfigTelegram() : {};
+        const token = cfgTg.botToken;
+        const chatId = cfgTg.chatId;
 
         if (!token || !chatId) {
             if (!silencioso) {

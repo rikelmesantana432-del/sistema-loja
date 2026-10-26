@@ -2091,9 +2091,9 @@ UI._obterWidgetBlocoNotas = function () {
     `;
 };
 
-// === WIDGET: CHECKLIST DIÁRIO DE TAREFAS DA FUNCIONÁRIA ===
+// === WIDGET: CHECKLIST DIÁRIO DE TAREFAS DA LOJA ===
 UI._obterWidgetChecklistDiario = function () {
-    const hojeYMD = new Date().toISOString().split('T')[0];
+    const hojeYMD = dataManager.hojeLocal ? dataManager.hojeLocal() : new Date().toISOString().split('T')[0];
     if (!dataManager.data.checklistDiario) dataManager.data.checklistDiario = {};
     const ck = dataManager.data.checklistDiario;
 

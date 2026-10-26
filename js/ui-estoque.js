@@ -383,12 +383,13 @@ UI._estoqueConfirmarNovo = function () {
     if (venda <= 0) return UI.toast('Preço de venda é obrigatório!', 'error');
 
     const novoId = Date.now();
+    const dataCompraLocal = dataManager.hojeLocal ? dataManager.hojeLocal() : new Date().toISOString().split('T')[0];
     if (tipo === 'celular') {
         const condicao = document.getElementById('novo-condicao')?.value || 'Novo';
         const fotoUrl = document.getElementById('novo-foto')?.value || '';
-        dataManager.data.estoqueCelulares.push({ id: novoId, nome, custo, precoVenda: venda, condicao, fotoUrl, dataCompra: new Date().toISOString().split('T')[0], status: 'disponivel', quantidade: qtd, giro: 'medio', popularidade: 'medio', idadeModelo: 'medio' });
+        dataManager.data.estoqueCelulares.push({ id: novoId, nome, custo, precoVenda: venda, condicao, fotoUrl, dataCompra: dataCompraLocal, status: 'disponivel', quantidade: qtd, giro: 'medio', popularidade: 'medio', idadeModelo: 'medio' });
     } else {
-        dataManager.data.estoqueAcessorios.push({ id: novoId, nome, custo, precoVenda: venda, tipo, dataCompra: new Date().toISOString().split('T')[0], status: 'disponivel', quantidade: qtd });
+        dataManager.data.estoqueAcessorios.push({ id: novoId, nome, custo, precoVenda: venda, tipo, dataCompra: dataCompraLocal, status: 'disponivel', quantidade: qtd });
     }
 
     dataManager.registrarLogHistorico({
@@ -723,4 +724,72 @@ UI._estoqueSalvarCustoRapido = function (id, tipo) {
     UI.renderEstoque();
 };
 
+// === GERADOR DE FOLHA DE ETIQUETAS A4 PARA VITRINE / ESTOQUE ===
+UI.modalImprimirEtiquetasA4 = function () {
+    const cels = (dataManager.data.estoqueCelulares || []).filter(c => c.status !== 'vendido' && (c.quantidade === undefined || c.quantidade > 0));
+    const acess = (dataManager.data.estoqueAcessorios || []).filter(a => a.status !== 'vendido' && (a.quantidade === undefined || a.quantidade > 0));
+    const todos = [
+        ...cels.map(c => ({ ...c, _cat: '📱 Celular' })),
+        ...acess.map(a => ({ ...a, _cat: '🎧 Acessório' }))
+    ];
 
+    if (todos.length === 0) {
+        return UI.toast('Não há produtos disponíveis no estoque para gerar etiquetas.', 'warning');
+    }
+
+    const previewCards = todos.slice(0, 30).map(item => `
+        <div style="border:1px dashed rgba(255,255,255,0.25);border-radius:8px;padding:10px;background:rgba(255,255,255,0.03);text-align:center;">
+            <div style="font-size:10px;color:#38bdf8;font-weight:700;">CESINHA ACESSÓRIOS • ${item._cat}</div>
+            <div style="font-size:13px;font-weight:800;color:#fff;margin:4px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.nome}</div>
+            <div style="font-size:16px;font-weight:900;color:#00d97e;">${UI.R(item.precoVenda || item.preco || 0)}</div>
+            <div style="font-size:10px;color:var(--text-muted);font-family:monospace;">CÓD: #${String(item.id).slice(-6)}</div>
+        </div>
+    `).join('');
+
+    UI.openModal('🖨️ Imprimir Folha de Etiquetas A4', `
+        <div style="padding:8px">
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
+                Foram preparados <strong>${todos.length} itens disponíveis</strong> para impressão em grade padrão A4 (3 colunas).
+            </p>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;max-height:320px;overflow-y:auto;padding:8px;background:rgba(0,0,0,0.25);border-radius:10px;margin-bottom:16px;">
+                ${previewCards}
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-ghost" onclick="UI.closeModal()">Cancelar</button>
+                <button class="btn btn-primary btn-lg" style="background:#00d97e;color:#000;font-weight:900;" onclick="UI._executarImpressaoEtiquetasA4()">🖨️ Imprimir Agora (A4)</button>
+            </div>
+        </div>
+    `);
+};
+
+UI._executarImpressaoEtiquetasA4 = function () {
+    const cels = (dataManager.data.estoqueCelulares || []).filter(c => c.status !== 'vendido' && (c.quantidade === undefined || c.quantidade > 0));
+    const acess = (dataManager.data.estoqueAcessorios || []).filter(a => a.status !== 'vendido' && (a.quantidade === undefined || a.quantidade > 0));
+    const todos = [...cels, ...acess];
+    const win = window.open('', '_blank');
+    if (!win) return UI.toast('Permita pop-ups para abrir a folha de impressão A4.', 'warning');
+
+    const cardsHtml = todos.map(item => `
+        <div style="border:1.5px solid #000;border-radius:6px;padding:10px;text-align:center;page-break-inside:avoid;">
+            <div style="font-size:10px;font-weight:bold;letter-spacing:0.5px;">CESINHA ACESSÓRIOS</div>
+            <div style="font-size:13px;font-weight:800;margin:6px 0;">${item.nome}</div>
+            <div style="font-size:18px;font-weight:900;">${UI.R(item.precoVenda || item.preco || 0)}</div>
+            <div style="font-size:10px;font-family:monospace;margin-top:4px;">*${String(item.id).slice(-6)}*</div>
+        </div>
+    `).join('');
+
+    win.document.write(`<!DOCTYPE html><html><head><title>Etiquetas A4 - Cesinha Acessórios</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 10mm; color: #000; }
+            .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6mm; }
+            @media print { .no-print { display: none; } }
+        </style>
+    </head><body>
+        <div class="no-print" style="margin-bottom:15px;text-align:right;">
+            <button onclick="window.print()" style="padding:10px 20px;font-size:16px;font-weight:bold;cursor:pointer;">🖨️ Imprimir</button>
+        </div>
+        <div class="grid">${cardsHtml}</div>
+        <script>setTimeout(() => window.print(), 400);<\/script>
+    </body></html>`);
+    win.document.close();
+};

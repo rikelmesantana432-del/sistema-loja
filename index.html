@@ -162,6 +162,31 @@
         </div>
     </main>
 
+    
+    <!-- BARRA DE NAVEGAÇÃO INFERIOR MOBILE (390x844px) -->
+    <nav class="mobile-bottom-nav" id="mobile-bottom-nav">
+        <button class="mob-nav-item" onclick="UI.navigate('inicio')" data-mob-page="inicio">
+            <span class="mob-nav-icon">🏠</span>
+            <span class="mob-nav-label">Início</span>
+        </button>
+        <button class="mob-nav-item mob-nav-destaque" onclick="UI.navigate('vendedor')" data-mob-page="vendedor">
+            <span class="mob-nav-icon">🏪</span>
+            <span class="mob-nav-label">Atender</span>
+        </button>
+        <button class="mob-nav-item" onclick="UI.navigate('caixa')" data-mob-page="caixa">
+            <span class="mob-nav-icon">💰</span>
+            <span class="mob-nav-label">Caixa</span>
+        </button>
+        <button class="mob-nav-item" onclick="UI.navigate('assistencia')" data-mob-page="assistencia">
+            <span class="mob-nav-icon">🔧</span>
+            <span class="mob-nav-label">OS/Peças</span>
+        </button>
+        <button class="mob-nav-item" onclick="UI.toggleSidebar()">
+            <span class="mob-nav-icon">☰</span>
+            <span class="mob-nav-label">Menu</span>
+        </button>
+    </nav>
+
     <!-- MODAL -->
     <div class="modal-overlay" id="modal-overlay" onclick="UI.closeModal()">
         <div class="modal-content" onclick="event.stopPropagation()">
@@ -184,6 +209,7 @@
 
     <!-- SCRIPTS (100% Localhost Seguro) -->
     <!-- Supabase e backup automático desativados para evitar re-injeção de itens deletados -->
+    <script src="js/backup-data.js?v=10.7.0"></script>
     <script src="js/data.js?v=10.6.0"></script>
     <script src="js/calculators.js?v=10.6.0"></script>
     <script src="js/ui.js?v=10.6.0"></script>

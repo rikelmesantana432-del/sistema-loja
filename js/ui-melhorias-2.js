@@ -1698,79 +1698,105 @@ UI.instalarAppPWA = function () {
     }
 };
 
-// ===== MODAL DE CONFIGURAÇÃO E TESTES DO BOT DO TELEGRAM =====
+// ===== MODAL DE CONFIGURAÇÃO E CENTRAL AUTOMÁTICA DO BOT DO TELEGRAM =====
 UI.modalConfigurarTelegram = function () {
-    const cfg = dataManager.data.configuracoes || {};
-    const botToken = cfg.telegramBotToken || '';
-    const chatId = cfg.telegramChatId || '';
-    const chatIdEquipe = cfg.telegramChatIdEquipe || '';
+    const cfg = dataManager.getConfigTelegram ? dataManager.getConfigTelegram() : (dataManager.data.configuracoes || {});
+    const botToken = cfg.botToken || cfg.telegramBotToken || '';
+    const chatId = cfg.chatId || cfg.telegramChatId || '';
+    const chatIdEquipe = cfg.chatIdEquipe || cfg.telegramChatIdEquipe || '';
+    const filaPendente = (dataManager.data.filaTelegramPendente || []).length;
 
-    UI.openModal('✈️ Configuração do Bot do Telegram', `
-        <div style="padding:14px">
-            <h3 style="color:#38bdf8;margin:0 0 10px 0;">🤖 INTEGRAR BOT DO TELEGRAM DA LOJA</h3>
-            <p style="font-size:14px;color:var(--text-muted);margin-bottom:14px;">
-                Receba relatórios de sábado, backups automáticos salvos no Telegram, alertas de reposição de estoque e notificações de caixa diretamente no seu celular ou grupo da equipe!
-            </p>
-
-            <div style="background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.3);padding:12px;border-radius:12px;margin-bottom:16px;font-size:13px;line-height:1.5;">
-                📌 <strong>Como criar seu Bot em 1 minuto:</strong><br>
-                1. No Telegram, busque por <strong>@BotFather</strong> e envie <code>/newbot</code> para criar seu bot e copiar o Token.<br>
-                2. Depois, busque por <strong>@userinfobot</strong> para descobrir seu <strong>Chat ID</strong>.
+    UI.openModal('✈️ Central Telegram 100% Automático', `
+        <div style="padding:10px">
+            <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.35);padding:12px 14px;border-radius:12px;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+                <div>
+                    <div style="color:#10b981;font-weight:900;font-size:15px;">🟢 PILOTO AUTOMÁTICO DO TELEGRAM ATIVO</div>
+                    <div style="font-size:12px;color:var(--text-muted);">Conectado ao Bot oficial da loja • Fila offline: ${filaPendente} pendente(s)</div>
+                </div>
+                <button class="btn btn-sm" style="background:#10b981;color:#000;font-weight:800;" onclick="UI._testarBotTelegram()">🧪 Testar Agora</button>
             </div>
 
-            <label class="form-label">Bot Token (fornecido pelo @BotFather):</label>
-            <input class="form-input" id="telegram-token-inp" placeholder="Ex: 7123456789:AAE-xxxxxx..." value="${botToken}" style="font-size:15px;padding:12px;margin-bottom:14px;width:100%;">
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px;margin-bottom:14px;">
+                <div style="font-size:13px;font-weight:800;color:#FFD700;margin-bottom:8px;">⚡ AUTOMAÇÕES EM TEMPO REAL (SEM PRECISAR CLICAR):</div>
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:6px;cursor:pointer;">
+                    <input type="checkbox" id="tg-auto-vendas" ${cfg.autoVendas !== false ? 'checked' : ''}>
+                    <span>🛒 Avisar cada <strong>Venda Realizada</strong> (com Custo, Lucro e Saldo da Gaveta)</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:6px;cursor:pointer;">
+                    <input type="checkbox" id="tg-auto-caixa" ${cfg.autoCaixa !== false ? 'checked' : ''}>
+                    <span>🚨 Avisar <strong>Estornos, Despesas, Sangrias, OS e Fiados</strong> na hora</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:6px;cursor:pointer;">
+                    <input type="checkbox" id="tg-auto-fechamento" ${cfg.autoFechamento !== false ? 'checked' : ''}>
+                    <span>📊 Enviar <strong>Fechamento Diário + Backup .JSON</strong> sozinho às 18h e ao Bater Caixa</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+                    <input type="checkbox" id="tg-auto-alertas" ${cfg.autoAlertas !== false ? 'checked' : ''}>
+                    <span>🔔 Enviar <strong>Lembrete Diário de Fiados Vencidos / Cobrar Hoje</strong></span>
+                </label>
+            </div>
 
-            <label class="form-label">Seu Chat ID (ou ID do grupo da loja):</label>
-            <input class="form-input" id="telegram-chatid-inp" placeholder="Ex: 123456789 ou -100xxxx" value="${chatId}" style="font-size:15px;padding:12px;margin-bottom:14px;width:100%;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
+                <button class="btn btn-sm" style="background:rgba(56,189,248,0.15);color:#38bdf8;border:1px solid rgba(56,189,248,0.3);font-weight:700;padding:10px;" onclick="UI._enviarFechamentoDiaTelegram()">📊 Enviar Fechamento Hoje</button>
+                <button class="btn btn-sm" style="background:rgba(168,85,247,0.15);color:#c084fc;border:1px solid rgba(168,85,247,0.3);font-weight:700;padding:10px;" onclick="UI._testarBackupTelegram()">💾 Enviar Backup .JSON</button>
+            </div>
 
-            <label class="form-label">Chat ID do Funcionário / Equipe (opcional):</label>
-            <input class="form-input" id="telegram-equipe-inp" placeholder="Ex: 987654321" value="${chatIdEquipe}" style="font-size:15px;padding:12px;margin-bottom:20px;width:100%;">
+            <details style="margin-bottom:14px;background:rgba(0,0,0,0.2);padding:10px;border-radius:10px;">
+                <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--text-muted);">⚙️ Ver / Editar Credenciais Técnicas (Token & Chat ID)</summary>
+                <div style="margin-top:10px;">
+                    <label class="form-label">Bot Token (@BotFather):</label>
+                    <input class="form-input" id="telegram-token-inp" value="${botToken}" style="font-size:14px;padding:10px;margin-bottom:10px;width:100%;">
+                    <label class="form-label">Chat ID Principal (Dono):</label>
+                    <input class="form-input" id="telegram-chatid-inp" value="${chatId}" style="font-size:14px;padding:10px;margin-bottom:10px;width:100%;">
+                    <label class="form-label">Chat ID Grupo / Equipe:</label>
+                    <input class="form-input" id="telegram-equipe-inp" value="${chatIdEquipe}" style="font-size:14px;padding:10px;width:100%;">
+                </div>
+            </details>
 
             <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                <button class="btn btn-ghost" style="flex:1;min-width:120px;" onclick="UI._testarBotTelegram()">🧪 Testar Envio</button>
-                <button class="btn btn-ghost" style="flex:1;min-width:120px;" onclick="UI._testarBackupTelegram()">💾 Testar Backup</button>
-                <button class="btn btn-primary btn-lg" style="flex:2;min-width:180px;font-size:16px;font-weight:800;" onclick="UI._salvarConfigTelegram()">💾 SALVAR</button>
+                <button class="btn btn-ghost" onclick="UI.closeModal()">Fechar</button>
+                <button class="btn btn-primary btn-lg" style="flex:1;font-size:15px;font-weight:800;" onclick="UI._salvarConfigTelegram()">💾 SALVAR AUTOMAÇÕES</button>
             </div>
         </div>
     `);
 };
 
 UI._salvarConfigTelegram = function () {
-    const token = document.getElementById('telegram-token-inp').value.trim();
-    const chatId = document.getElementById('telegram-chatid-inp').value.trim();
-    const chatIdEquipe = document.getElementById('telegram-equipe-inp').value.trim();
-
-    if (!dataManager.data.configuracoes) dataManager.data.configuracoes = {};
-    dataManager.data.configuracoes.telegramBotToken = token;
-    dataManager.data.configuracoes.telegramChatId = chatId;
-    dataManager.data.configuracoes.telegramChatIdEquipe = chatIdEquipe;
-
-    dataManager.saveData();
+    UI._salvarConfigTelegramSilencioso();
     UI.closeModal();
-    UI.toast('✈️ Configurações do Telegram salvas com sucesso!', 'success');
+    UI.toast('✈️ Automação do Telegram salva e ativa!', 'success');
 };
 
 UI._salvarConfigTelegramSilencioso = function () {
-    const token = document.getElementById('telegram-token-inp')?.value.trim();
-    const chatId = document.getElementById('telegram-chatid-inp')?.value.trim();
-    const chatIdEquipe = document.getElementById('telegram-equipe-inp')?.value.trim();
+    const token = document.getElementById('telegram-token-inp')?.value?.trim();
+    const chatId = document.getElementById('telegram-chatid-inp')?.value?.trim();
+    const chatIdEquipe = document.getElementById('telegram-equipe-inp')?.value?.trim();
+    const autoVendas = document.getElementById('tg-auto-vendas') ? document.getElementById('tg-auto-vendas').checked : undefined;
+    const autoCaixa = document.getElementById('tg-auto-caixa') ? document.getElementById('tg-auto-caixa').checked : undefined;
+    const autoFechamento = document.getElementById('tg-auto-fechamento') ? document.getElementById('tg-auto-fechamento').checked : undefined;
+    const autoAlertas = document.getElementById('tg-auto-alertas') ? document.getElementById('tg-auto-alertas').checked : undefined;
 
-    if (!dataManager.data.configuracoes) dataManager.data.configuracoes = {};
-    if (token !== undefined) dataManager.data.configuracoes.telegramBotToken = token;
-    if (chatId !== undefined) dataManager.data.configuracoes.telegramChatId = chatId;
-    if (chatIdEquipe !== undefined) dataManager.data.configuracoes.telegramChatIdEquipe = chatIdEquipe;
-    dataManager.saveData();
+    if (typeof dataManager.salvarConfigTelegram === 'function') {
+        dataManager.salvarConfigTelegram({
+            botToken: token,
+            chatId: chatId,
+            chatIdEquipe: chatIdEquipe,
+            autoVendas,
+            autoCaixa,
+            autoFechamento,
+            autoAlertas
+        });
+    }
 };
 
 UI._testarBotTelegram = async function () {
     UI._salvarConfigTelegramSilencioso();
     UI.toast('✈️ Enviando mensagem de teste para o Telegram...', 'info');
-    const res = await dataManager.enviarTelegram('🚀 *TESTE STRATEGYOS* — Seu Bot do Telegram está conectado e operando perfeitamente!');
-    if (res.sucesso) {
-        UI.toast('🎉 Mensagem de teste enviada com sucesso no Telegram!', 'success');
+    const res = await dataManager.enviarTelegram('🚀 *TESTE STRATEGYOS 3.0* — Seu Bot do Telegram está 100% conectado e em Piloto Automático!');
+    if (res && res.sucesso) {
+        UI.toast('🎉 Mensagem enviada com sucesso no Telegram!', 'success');
     } else {
-        UI.toast('❌ Erro no envio: ' + (res.erro || 'Verifique Token e Chat ID'), 'error');
+        UI.toast('⚠️ Mensagem colocada na fila automática (verifique conexão).', 'warning');
     }
 };
 
@@ -1778,9 +1804,9 @@ UI._testarBackupTelegram = async function () {
     UI._salvarConfigTelegramSilencioso();
     UI.toast('💾 Enviando arquivo backup .JSON para o Telegram...', 'info');
     const res = await dataManager.enviarBackupDocumentoTelegram();
-    if (res.sucesso) {
+    if (res && res.sucesso) {
         UI.toast('🎉 Backup do sistema guardado permanentemente no Telegram!', 'success');
     } else {
-        UI.toast('❌ Erro ao enviar backup: ' + (res.erro || 'Verifique configurações'), 'error');
+        UI.toast('❌ Erro ao enviar backup: ' + (res?.erro || 'Verifique conexão'), 'error');
     }
 };
