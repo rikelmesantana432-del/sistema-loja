@@ -21,7 +21,7 @@ const UI = {
         
         // Alerta de deploy de teste
         const host = window.location.hostname;
-        if (host.includes('netlify.app') && host !== 'cesinha-acessorios-strategyos.netlify.app' && !document.getElementById('banner-deploy-teste')) {
+        if (host.includes('netlify.app') && host !== 'cesinha-acessorios.netlify.app' && host !== 'cesinha-acessorios-strategyos.netlify.app' && !document.getElementById('banner-deploy-teste')) {
             const banner = document.createElement('div');
             banner.id = 'banner-deploy-teste';
             banner.style.cssText = 'background:#e63757;color:#fff;text-align:center;padding:12px;font-size:15px;font-weight:900;position:sticky;top:0;z-index:999999;box-shadow:0 4px 15px rgba(0,0,0,0.3);line-height:1.4;';

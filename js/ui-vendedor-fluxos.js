@@ -147,9 +147,8 @@ UI._consertoPasso3 = function () {
 
     const telaPeca = (servicos.tela || servicos.telaOriginal || { p: 110, m: 50, d: 3 });
     const cTela = telaPeca.p || 110;
-    const sugTela = cTela <= 80 ? Math.max(Math.ceil((cTela * 3.0) / 10) * 10, 80) :
-        cTela <= 200 ? Math.ceil((cTela * 2.0 + 40) / 10) * 10 :
-        Math.ceil((cTela * 1.5 + 80) / 10) * 10;
+    const faixasTela = Calculators._calcularPrecoConsertoEscalonado(cTela, telaPeca.m || 50);
+    const sugTela = faixasTela.maximo;
 
     let html = `<div class="vendedor-step-header"><span class="vendedor-step-badge" style="background:${VENDEDOR_CORES.conserto.accent}">PASSO 3 DE 5</span><h2 style="font-size:28px">🔧 QUAL O SERVIÇO?</h2><p style="font-size:20px">Aparelho: ${modelo}</p></div>`;
     
@@ -210,11 +209,8 @@ UI._consertoPasso3 = function () {
         const nomeFinal = servicoNomesGerais[tipo] || tipo.replace('_', ' ').toUpperCase();
         const custoPeca = dados.p;
         const custoTotal = dados.p + dados.m;
-        const precoSugerido = (custoPeca > 0) ? (
-            custoPeca <= 80 ? Math.max(Math.ceil((custoPeca * 3.0) / 10) * 10, 80) :
-            custoPeca <= 200 ? Math.ceil((custoPeca * 2.0 + 40) / 10) * 10 :
-            Math.ceil((custoPeca * 1.5 + 80) / 10) * 10
-        ) : Math.ceil(custoTotal * 1.5 / 10) * 10;
+        const faixasSrv = Calculators._calcularPrecoConsertoEscalonado(custoPeca, dados.m || 40);
+        const precoSugerido = faixasSrv.maximo;
 
         html += `<div class="vendedor-produto-item" style="padding:14px;margin-bottom:8px;" onclick="UI._consertoPasso4('${tipo}',${custoPeca},${dados.d},'${nomeFinal}')">
             <div class="vendedor-produto-info">
@@ -254,27 +250,16 @@ UI._consertoPasso4 = function (tipo, custoInterno, prazo, nomeServico, valorFixo
     UI._consertoData._custoInterno = custoInterno;
     UI._consertoData.prazo = prazo;
     let precos = [];
+    let valorPadraoInput = valorFixoPredefinido || '';
     if (valorFixoPredefinido) {
-        precos = [{ label: '⚡ VALOR PADRÃO DO SERVIÇO', valor: valorFixoPredefinido }];
+        precos = [{ label: '⚡ VALOR PADRÃO DO SERVIÇO', valor: valorFixoPredefinido, cor: '#00d97e', destaque: true }];
     } else if (custoInterno > 0) {
-        let ideal, medio, minimo;
-        if (custoInterno <= 80) {
-            ideal = Math.max(Math.ceil((custoInterno * 3.0) / 10) * 10, 80);
-            medio = Math.max(Math.ceil((custoInterno * 2.5) / 10) * 10, 70);
-            minimo = Math.max(Math.ceil((custoInterno * 2.0) / 10) * 10, 60);
-        } else if (custoInterno <= 200) {
-            ideal = Math.ceil((custoInterno * 2.0 + 40) / 10) * 10;
-            medio = Math.ceil((custoInterno * 1.8 + 30) / 10) * 10;
-            minimo = Math.ceil((custoInterno * 1.5 + 20) / 10) * 10;
-        } else {
-            ideal = Math.ceil((custoInterno * 1.5 + 80) / 10) * 10;
-            medio = Math.ceil((custoInterno * 1.4 + 50) / 10) * 10;
-            minimo = Math.ceil((custoInterno * 1.3 + 30) / 10) * 10;
-        }
+        const faixas = Calculators._calcularPrecoConsertoEscalonado(custoInterno, 50);
+        valorPadraoInput = faixas.maximo;
         precos = [
-            { label: '💚 PREÇO RECOMENDADO (Lucro Justo)', valor: ideal },
-            { label: '🟡 PREÇO MÉDIO / COMPETITIVO', valor: medio },
-            { label: '🔴 PREÇO MÍNIMO (Margem de Entrada)', valor: minimo }
+            { label: '💎 PREÇO TABELA CHEIA (Teto Máximo — Cobrar Este!)', valor: faixas.maximo, cor: '#00FFA3', destaque: true },
+            { label: '🟡 COM DESCONTO À VISTA / PIX (Negociação)', valor: faixas.medio, cor: '#FFD700', destaque: false },
+            { label: '🔒 LIMITE MÍNIMO (Apenas com Autorização)', valor: faixas.minimo, cor: '#f87171', destaque: false }
         ];
     }
     document.getElementById('main-content').innerHTML = _vndWrap('conserto', `
@@ -284,10 +269,10 @@ UI._consertoPasso4 = function (tipo, custoInterno, prazo, nomeServico, valorFixo
             <p style="font-size:18px">Aparelho: <strong>${UI._consertoData.modelo}</strong></p>
             <p style="font-size:18px">Serviço: <strong>${nomeServico || tipo}</strong></p>
         </div>
-        ${precos.length ? '<div class="vendedor-section"><h3 style="font-size:22px">💰 SUGESTÕES DE PREÇO:</h3>' +
-            precos.map(pr => `<div class="vendedor-produto-item" style="padding:14px;border:2px solid #00d97e;background:rgba(0,217,126,0.08);" onclick="UI._consertoSetPreco(${pr.valor})"><div class="vendedor-produto-info"><div class="vendedor-produto-nome" style="font-size:18px">${pr.label}</div><div class="vendedor-produto-detalhe" style="font-size:20px;font-weight:800;color:#00d97e;">Cobrar do cliente: ${UI.R(pr.valor)}</div></div><div class="vendedor-produto-acoes"><span class="vendedor-produto-btn" style="color:${VENDEDOR_CORES.conserto.accent};font-size:18px;font-weight:bold;">ESCOLHER →</span></div></div>`).join('') +
+        ${precos.length ? '<div class="vendedor-section"><h3 style="font-size:22px">💰 ESCOLHA O VALOR (SEMPRE PRIORIZE A TABELA CHEIA):</h3>' +
+            precos.map(pr => `<div class="vendedor-produto-item" style="padding:${pr.destaque ? '18px' : '14px'};border:2px solid ${pr.cor};background:${pr.destaque ? 'rgba(0,255,163,0.14)' : 'rgba(255,255,255,0.04)'};margin-bottom:10px;" onclick="UI._consertoSetPreco(${pr.valor})"><div class="vendedor-produto-info"><div class="vendedor-produto-nome" style="font-size:${pr.destaque ? '20px' : '17px'};font-weight:800;color:${pr.cor};">${pr.label}</div><div class="vendedor-produto-detalhe" style="font-size:${pr.destaque ? '24px' : '19px'};font-weight:900;color:#fff;margin-top:4px;">Cobrar do cliente: <span style="color:${pr.cor}">${UI.R(pr.valor)}</span></div></div><div class="vendedor-produto-acoes"><span class="vendedor-produto-btn" style="color:${pr.cor};font-size:18px;font-weight:900;">ESCOLHER →</span></div></div>`).join('') +
             '</div>' : ''}
-        <div style="margin-top:12px"><label class="form-label" style="font-size:18px">Ou digite o valor desejado:</label><input class="form-input" id="cons-preco-custom" type="number" style="font-size:24px;text-align:center;font-weight:700;padding:14px" placeholder="R$" value="${valorFixoPredefinido || ''}"></div>
+        <div style="margin-top:12px"><label class="form-label" style="font-size:18px">Valor a cobrar (R$):</label><input class="form-input" id="cons-preco-custom" type="number" style="font-size:24px;text-align:center;font-weight:800;padding:14px;color:#00FFA3;" placeholder="R$" value="${valorPadraoInput}"></div>
         <div class="vendedor-nav">
             <button class="btn btn-ghost btn-lg" style="font-size:18px" onclick="UI._consertoPasso3()">← Voltar</button>
             <button class="btn btn-lg" style="background:${VENDEDOR_CORES.conserto.accent};color:#fff;font-size:20px" onclick="UI._consertoSetPreco(parseFloat(document.getElementById('cons-preco-custom').value))">Próximo →</button>

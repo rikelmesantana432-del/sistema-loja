@@ -255,11 +255,6 @@ UI.renderVendedor = function () {
                     <span class="vendedor-btn-title reg-card-title" style="color:${VENDEDOR_CORES.conserto.accent};font-size:22px;font-weight:900;display:block;">CONSERTO</span>
                     <span class="vendedor-btn-desc" style="font-size:14px;color:var(--text-muted);margin-top:4px;">Cliente quer consertar</span>
                 </button>
-                <button class="vendedor-btn reg-card" style="border-color:${VENDEDOR_CORES.pelicula.border};background:${VENDEDOR_CORES.pelicula.bg};padding:22px 16px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:16px;text-align:center;" onclick="UI._vendedorPelicula()">
-                    <span class="vendedor-btn-icon reg-card-icon" style="font-size:42px;margin-bottom:8px">📱</span>
-                    <span class="vendedor-btn-title reg-card-title" style="color:${VENDEDOR_CORES.pelicula.accent};font-size:22px;font-weight:900;display:block;">PELÍCULA</span>
-                    <span class="vendedor-btn-desc" style="font-size:14px;color:var(--text-muted);margin-top:4px;">Cliente quer película</span>
-                </button>
                 <button class="vendedor-btn reg-card" style="border-color:#a855f7;background:rgba(168,85,247,0.08);padding:22px 16px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:16px;text-align:center;" onclick="UI._vendedorEncomendas()">
                     <span class="vendedor-btn-icon reg-card-icon" style="font-size:42px;margin-bottom:8px">📦</span>
                     <span class="vendedor-btn-title reg-card-title" style="color:#a855f7;font-size:22px;font-weight:900;display:block;">ENCOMENDAS</span>

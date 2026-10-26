@@ -266,30 +266,47 @@ const Calculators = {
         const custo = Number(custoPeca) || 0;
         const totalBase = custo + (Number(custoMaoObra) || 0);
         if (custo <= 0) {
+            const tetoSemPeca = Math.max(Math.round(totalBase * 2.0), 70);
             return {
-                minimo: Math.max(Math.round(totalBase * 1.3), 30),
-                ideal: Math.max(Math.round(totalBase * 1.5), 50),
-                maximo: Math.max(Math.round(totalBase * 1.8), 60)
+                minimo: Math.max(Math.round(totalBase * 1.5), 50),
+                medio: Math.max(Math.round(totalBase * 1.75), 60),
+                ideal: tetoSemPeca,
+                maximo: tetoSemPeca
             };
         }
+        // REGRA DE OURO DO DONO (MAXIMIZAÇÃO DE LUCROS E ATIVOS):
+        // O preço principal ("ideal" / "maximo") SEMPRE joga no TETO MÁXIMO que o mercado paga,
+        // garantindo lucro mínimo de R$ 190 nas telas intermediárias e buscando lucro máximo de R$ 270 a R$ 450+.
         if (custo <= 80) {
+            const teto = Math.max(Math.ceil((custo + 220) / 10) * 10, Math.ceil((custo * 3.5) / 10) * 10, 250);
+            const intermediario = Math.max(Math.ceil((custo + 190) / 10) * 10, 220);
+            const piso = Math.max(Math.ceil((custo + 160) / 10) * 10, 190);
             return {
-                minimo: Math.max(Math.ceil((custo * 2.0) / 10) * 10, 60),
-                ideal: Math.max(Math.ceil((custo * 3.0) / 10) * 10, 80),
-                maximo: Math.max(Math.ceil((custo * 3.2) / 10) * 10, 90)
+                minimo: piso,
+                medio: intermediario,
+                ideal: teto,
+                maximo: teto
             };
         }
         if (custo <= 200) {
+            const teto = Math.max(Math.ceil((custo + 270) / 10) * 10, Math.ceil((custo * 2.5 + 60) / 10) * 10);
+            const intermediario = Math.max(Math.ceil((custo + 230) / 10) * 10, Math.ceil((custo * 2.2 + 40) / 10) * 10);
+            const piso = Math.max(Math.ceil((custo + 190) / 10) * 10, Math.ceil((custo * 1.9 + 30) / 10) * 10);
             return {
-                minimo: Math.ceil((custo * 1.5 + 20) / 10) * 10,
-                ideal: Math.ceil((custo * 2.0 + 40) / 10) * 10,
-                maximo: Math.ceil((custo * 2.2 + 50) / 10) * 10
+                minimo: piso,
+                medio: intermediario,
+                ideal: teto,
+                maximo: teto
             };
         }
+        const teto = Math.max(Math.ceil((custo + 320) / 10) * 10, Math.ceil((custo * 2.1 + 80) / 10) * 10);
+        const intermediario = Math.max(Math.ceil((custo + 270) / 10) * 10, Math.ceil((custo * 1.85 + 60) / 10) * 10);
+        const piso = Math.max(Math.ceil((custo + 220) / 10) * 10, Math.ceil((custo * 1.65 + 40) / 10) * 10);
         return {
-            minimo: Math.ceil((custo * 1.3 + 30) / 10) * 10,
-            ideal: Math.ceil((custo * 1.5 + 80) / 10) * 10,
-            maximo: Math.ceil((custo * 1.7 + 90) / 10) * 10
+            minimo: piso,
+            medio: intermediario,
+            ideal: teto,
+            maximo: teto
         };
     },
 

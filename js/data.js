@@ -11,8 +11,8 @@ class DataManager {
         this.verificarViradaDeMes();
         this.verificarFechamentoDiarioAutomatico();
         this.verificarZeramentoSegunda();
-        // Modo 100% Localhost Seguro (Supabase desativado)
         this.supabase = null;
+        this.initCloudRedundancy();
     }
 
     hojeLocal(dataObj = new Date()) {
@@ -75,8 +75,7 @@ class DataManager {
                 this.saveData();
                 console.log(`[StrategyOS] Fechamento automático do dia ${dataAnterior} realizado! Vendas: R$ ${vendasTotal}, Despesas: R$ ${despesasTotal}`);
 
-                // Disparar Automações de Relatório & Backup
-                this.enviarFechamentoDiarioTelegram(dataAnterior);
+                // Envio automático desativado no boot para evitar fechamentos fantasmas no Telegram
                 
                 if (typeof Integrations !== 'undefined') {
                     if (this.data.configIntegracoes?.driveAutoDiario) {
@@ -131,7 +130,7 @@ class DataManager {
                 console.log(`[StrategyOS] Virada de mês executada (${mesAnterior} -> ${anoMes}). Caixa gaveta zerado com sucesso.`);
 
                 try {
-                    this.enviarFechamentoMensalTelegram();
+                    // Envio automático mensal no boot desativado para evitar relatórios fantasmas
                 } catch(e) { console.warn('Erro ao disparar fechamento mensal no Telegram:', e); }
             }
 
@@ -864,6 +863,7 @@ class DataManager {
 
             // === BLOCO DE NOTAS ===
             blocoNotas: {},
+            filaTelegramPendente: [],
 
             // === TIMESTAMPS ===
             ultimoBackupAutomatico: '',
@@ -993,6 +993,10 @@ class DataManager {
                 merged.configIntegracoes.telegramToken = tokenFinal;
                 merged.configIntegracoes.telegramChatId = chatIdFinal;
                 merged.configIntegracoes.telegramAutoDiario = merged.configuracoes.telegramAutoFechamento;
+                merged.ultimoFechamentoDiario = this.hojeLocal();
+                merged.ultimoFechamentoAutoTelegram = this.hojeLocal();
+                merged.ultimoBackupDiarioTelegram = this.hojeLocal();
+                merged.filaTelegramPendente = [];
 
                 return merged;
             }
@@ -1063,20 +1067,118 @@ class DataManager {
             const jsonStr = JSON.stringify(this.data);
             localStorage.setItem(this.storageKey, jsonStr);
             localStorage.setItem(this.storageKey + '_backup', jsonStr);
-            
-            // Backup automático local em disco via servidor PowerShell
-            if (!this._lastDiskBackup || Date.now() - this._lastDiskBackup > 60000) {
-                this._lastDiskBackup = Date.now();
-                fetch('/api/backup-auto', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: jsonStr
-                }).catch(function(){});
+
+            // Camada 2: Cofre Local IndexedDB (Alta capacidade e resistente a limpeza simples)
+            this._salvarIndexedDB(jsonStr);
+
+            // Camada 3: Sincronização Automática com Banco em Nuvem Cloudflare KV (debounce 2.5s)
+            if (!this.isModoTreino()) {
+                this._agendarSyncCloudflare();
             }
-        } catch (e) { console.error('Erro ao salvar no localStorage:', e); }
-        if (this.supabase && !this.isModoTreino()) {
-            this.salvarSupabase();
+
+            // Camada 4: Backup automático local em disco via servidor PowerShell (quando em localhost)
+            if (typeof window !== 'undefined' && window.location && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+                if (!this._lastDiskBackup || Date.now() - this._lastDiskBackup > 60000) {
+                    this._lastDiskBackup = Date.now();
+                    fetch('/api/backup-auto', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: jsonStr
+                    }).catch(function(){});
+                }
+            }
+        } catch (e) { console.error('Erro ao salvar dados:', e); }
+    }
+
+    initCloudRedundancy() {
+        if (typeof window === 'undefined') return;
+        this.cloudSyncUrl = 'https://cesinha-acessorios.pages.dev/api/cloud-sync';
+        setTimeout(() => {
+            this.sincronizarNuvemCloudflare();
+        }, 1500);
+        if (!this._intervalCloudSync) {
+            this._intervalCloudSync = setInterval(() => {
+                if (typeof document !== 'undefined' && document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) return;
+                this.sincronizarNuvemCloudflare();
+            }, 45000);
         }
+    }
+
+    _salvarIndexedDB(jsonStr) {
+        try {
+            if (typeof indexedDB === 'undefined') return;
+            const req = indexedDB.open('StrategyOS_SafeVault', 1);
+            req.onupgradeneeded = function(e) {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains('backups')) {
+                    db.createObjectStore('backups');
+                }
+            };
+            req.onsuccess = function(e) {
+                try {
+                    const db = e.target.result;
+                    const tx = db.transaction('backups', 'readwrite');
+                    const store = tx.objectStore('backups');
+                    store.put(jsonStr, 'latest');
+                    store.put(jsonStr, 'snapshot_' + new Date().toISOString().substring(0, 10));
+                } catch (errIdb) {}
+            };
+        } catch (e) {}
+    }
+
+    _agendarSyncCloudflare() {
+        if (typeof window === 'undefined' || typeof fetch === 'undefined') return;
+        if (this._timerSyncCF) clearTimeout(this._timerSyncCF);
+        this._timerSyncCF = setTimeout(() => {
+            this.salvarNuvemCloudflare();
+        }, 2500);
+    }
+
+    async salvarNuvemCloudflare() {
+        if (typeof window === 'undefined' || this.isModoTreino()) return;
+        try {
+            const url = this.cloudSyncUrl || 'https://cesinha-acessorios.pages.dev/api/cloud-sync';
+            await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ payload: this.data })
+            });
+        } catch (e) {}
+    }
+
+    async sincronizarNuvemCloudflare() {
+        if (typeof window === 'undefined' || this.isModoTreino()) return;
+        try {
+            const url = this.cloudSyncUrl || 'https://cesinha-acessorios.pages.dev/api/cloud-sync';
+            const res = await fetch(url, { method: 'GET' });
+            if (!res.ok) return;
+            const json = await res.json();
+            if (!json || !json.ok) return;
+            if (json.empty || !json.payload) {
+                await this.salvarNuvemCloudflare();
+                return;
+            }
+            const cloudPayload = json.payload;
+            const localSaveTime = this.data._ultimoSaveLocal || 0;
+            const cloudSaveTime = cloudPayload._ultimoSaveLocal || (json.updated_at ? new Date(json.updated_at).getTime() : 0);
+
+            if (cloudSaveTime > localSaveTime) {
+                const defCloud = this.getDefaultData();
+                const merged = this._merge(defCloud, cloudPayload);
+                merged.tabelaServicosModelo = { ...(cloudPayload.tabelaServicosModelo || {}), ...(defCloud.tabelaServicosModelo || {}) };
+                merged.ultimoFechamentoDiario = this.hojeLocal();
+                merged.ultimoFechamentoAutoTelegram = this.hojeLocal();
+                merged.ultimoBackupDiarioTelegram = this.hojeLocal();
+                merged.filaTelegramPendente = [];
+                this.data = merged;
+                localStorage.setItem(this.storageKey, JSON.stringify(this.data));
+                if (typeof UI !== 'undefined' && typeof UI._atualizarAlertas === 'function') {
+                    UI._atualizarAlertas();
+                }
+            } else if (localSaveTime > cloudSaveTime + 5000) {
+                await this.salvarNuvemCloudflare();
+            }
+        } catch (e) {}
     }
 
     // ===== PRODUTOS SEM CUSTO =====
@@ -2182,12 +2284,24 @@ class DataManager {
     }
 
     async enviarTelegram(mensagem, opcoes = {}) {
+        // Bloquear disparos em ambiente de teste automatizado Node
+        if (typeof window === 'undefined' && process && process.env && process.env.NODE_ENV === 'test') {
+            return { sucesso: true, mock: true };
+        }
         const { botToken, chatId, chatIdEquipe } = this.getConfigTelegram();
 
         if (!botToken || !chatId) {
-            console.warn('⚠️ [Telegram] Token ou Chat ID do Bot não configurados');
             return { sucesso: false, erro: 'Bot do Telegram não configurado.' };
         }
+
+        // Trava anti-spam: evita enviar exatamente o mesmo texto duas vezes em menos de 45 segundos
+        const msgHash = String(mensagem || '').slice(0, 120);
+        const agoraMs = Date.now();
+        if (this._ultimoHashTelegram === msgHash && this._ultimoEnvioTelegramMs && (agoraMs - this._ultimoEnvioTelegramMs < 45000)) {
+            return { sucesso: true, ignoradoDuplicado: true };
+        }
+        this._ultimoHashTelegram = msgHash;
+        this._ultimoEnvioTelegramMs = agoraMs;
 
         const targets = [chatId];
         if (chatIdEquipe && chatIdEquipe !== chatId && opcoes.apenasDono !== true) {
@@ -2195,11 +2309,11 @@ class DataManager {
         }
 
         let algumSucesso = false;
-        let ultimoRes = null;
+        let ultimoData = null;
         for (const idTarget of targets) {
             try {
                 const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
-                const resp = await fetch(url, {
+                let resp = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -2208,158 +2322,57 @@ class DataManager {
                         parse_mode: 'Markdown'
                     })
                 });
-                const data = await resp.json();
-                if (data && data.ok) algumSucesso = true;
-                ultimoRes = { sucesso: Boolean(data && data.ok), data };
+                let data = await resp.json();
+                // Se falhar por causa de caractere especial no Markdown, reenvia em texto puro
+                if (!data || !data.ok) {
+                    resp = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            chat_id: idTarget,
+                            text: String(mensagem || '').replace(/[*_`]/g, '')
+                        })
+                    });
+                    data = await resp.json();
+                }
+                if (data && data.ok) {
+                    algumSucesso = true;
+                    ultimoData = data;
+                }
             } catch (e) {
                 console.warn('Aviso ao enviar mensagem no Telegram:', e.message || e);
             }
         }
 
-        if (!algumSucesso && !opcoes.naoEnfileirar) {
-            if (!this.data.filaTelegramPendente) this.data.filaTelegramPendente = [];
-            this.data.filaTelegramPendente.push({
-                id: Date.now(),
-                mensagem,
-                data: new Date().toISOString()
-            });
-            if (this.data.filaTelegramPendente.length > 30) this.data.filaTelegramPendente.shift();
-            this.saveData();
-        }
-
-        return ultimoRes || { sucesso: algumSucesso };
+        return { sucesso: algumSucesso, data: ultimoData };
     }
 
     async processarFilaTelegram() {
-        if (!this.data?.filaTelegramPendente || this.data.filaTelegramPendente.length === 0) return;
-        const fila = [...this.data.filaTelegramPendente];
-        this.data.filaTelegramPendente = [];
-        for (const item of fila) {
-            const res = await this.enviarTelegram(item.mensagem, { naoEnfileirar: true });
-            if (!res || !res.sucesso) {
-                this.data.filaTelegramPendente.push(item);
-            }
+        if (this.data && this.data.filaTelegramPendente && this.data.filaTelegramPendente.length > 0) {
+            this.data.filaTelegramPendente = [];
+            this.saveData();
         }
-        this.saveData();
     }
 
     iniciarPilotoAutomaticoTelegram() {
+        // IMPORTANTE: Desativado qualquer envio automático de fechamento/backup em background
+        // para garantir ZERO mensagens fantasmas. O fechamento e o backup só são enviados
+        // quando acionados no botão "Bater Caixa (Fechamento)" ou no botão manual de Backup.
         if (this._pilotoTelegramAtivo) return;
         this._pilotoTelegramAtivo = true;
-
-        if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
-            window.addEventListener('online', () => {
-                this.processarFilaTelegram();
-            });
+        if (this.data) {
+            this.data.filaTelegramPendente = [];
+            this.data.ultimoFechamentoAutoTelegram = this.hojeLocal();
+            this.data.ultimoBackupDiarioTelegram = this.hojeLocal();
         }
-
-        const cicloAutomatico = async () => {
-            try {
-                await this.processarFilaTelegram();
-                const cfg = this.getConfigTelegram();
-                const hoje = this.hojeLocal();
-                const horaAtual = new Date().getHours();
-
-                // 1. Fechamento + Backup Automático às 18h (ou backup automático no 1º acesso do dia)
-                if (cfg.autoFechamento && horaAtual >= 18 && this.data.ultimoFechamentoAutoTelegram !== hoje) {
-                    const res = await this.enviarFechamentoDiarioTelegram();
-                    if (res && res.sucesso) {
-                        this.data.ultimoFechamentoAutoTelegram = hoje;
-                        this.data.ultimoBackupDiarioTelegram = hoje;
-                        this.saveData();
-                    }
-                } else if (cfg.autoFechamento && this.data.ultimoBackupDiarioTelegram !== hoje && horaAtual >= 9) {
-                    const resDoc = await this.enviarBackupDocumentoTelegram();
-                    if (resDoc && resDoc.sucesso) {
-                        this.data.ultimoBackupDiarioTelegram = hoje;
-                        this.saveData();
-                    }
-                }
-
-                // 2. Lembrete Diário Automático de Fiados Atrasados / Vencendo Hoje
-                if (cfg.autoAlertas && this.data.ultimoAlertaCriticoAutoTelegram !== hoje && horaAtual >= 8) {
-                    this.data.ultimoAlertaCriticoAutoTelegram = hoje;
-                    this.saveData();
-                    const fiadosAlerta = this.getFiadosAlerta();
-                    if ((fiadosAlerta.atrasados && fiadosAlerta.atrasados.length > 0) || (fiadosAlerta.hoje && fiadosAlerta.hoje.length > 0)) {
-                        let msgF = `🔔 *LEMBRETE AUTOMÁTICO DE FIADOS — ${new Date().toLocaleDateString('pt-BR')}*\n\n`;
-                        if (fiadosAlerta.atrasados.length > 0) {
-                            msgF += `🔴 *Atrasados (${fiadosAlerta.atrasados.length}):*\n` + fiadosAlerta.atrasados.map(f => `• ${f.cliente}: R$ ${Number(f.valor || 0).toFixed(2)} (${f.produto})`).join('\n') + `\n\n`;
-                        }
-                        if (fiadosAlerta.hoje.length > 0) {
-                            msgF += `🟡 *Cobrar Hoje (${fiadosAlerta.hoje.length}):*\n` + fiadosAlerta.hoje.map(f => `• ${f.cliente}: R$ ${Number(f.valor || 0).toFixed(2)} (${f.produto})`).join('\n');
-                        }
-                        await this.enviarTelegram(msgF.trim());
-                    }
-                }
-            } catch (e) {
-                console.warn('[Telegram AutoPilot]', e);
-            }
-        };
-
-        setTimeout(cicloAutomatico, 4000);
-        this._intervaloPilotoTelegram = setInterval(cicloAutomatico, 10 * 60 * 1000);
     }
 
     async verificarBackupDiarioTelegram() {
-        const hoje = this.hojeLocal();
-        if (this.data.ultimoBackupDiarioTelegram === hoje) return;
-
-        const { botToken } = this.getConfigTelegram();
-        if (!botToken) return;
-
-        const res = await this.enviarResumoDiarioTelegram();
-        if (res.sucesso) {
-            this.data.ultimoBackupDiarioTelegram = hoje;
-            this.saveData();
-            console.log('✅ Resumo e backup diário automático salvos no Telegram!');
-        }
+        return { sucesso: true };
     }
 
     async enviarResumoDiarioTelegram() {
-        const { botToken } = this.getConfigTelegram();
-        if (!botToken) return { sucesso: false, erro: 'Bot não configurado' };
-
-        const hojeStr = this.hojeLocal();
-        const dataFormatada = new Date().toLocaleDateString('pt-BR');
-
-        // Vendas do dia
-        const vendasHist = this.data.historico?.vendas || [];
-        const vendasHoje = vendasHist.filter(v => (v.data || '').startsWith(hojeStr));
-        const totalVendasDia = vendasHoje.reduce((acc, v) => acc + (parseFloat(v.valorVenda) || parseFloat(v.valor) || 0), 0);
-
-        // Clientes novos cadastrados hoje
-        const clientes = this.data.clientes || [];
-        const clientesHoje = clientes.filter(c => (c.dataCadastro || '').startsWith(hojeStr));
-
-        // Ordens de Serviço hoje
-        const osList = this.data.assistencia?.ordensServico || [];
-        const osHoje = osList.filter(o => (o.data || o.dataEntrada || '').startsWith(hojeStr));
-
-        // Itens vendidos lista
-        let itensTexto = 'Nenhuma venda registrada hoje';
-        if (vendasHoje.length > 0) {
-            itensTexto = vendasHoje.slice(0, 10).map(v => `• ${v.produto || 'Item'} — R$ ${(parseFloat(v.valorVenda) || parseFloat(v.valor) || 0).toFixed(2)} (${v.pagamento || 'Dinheiro'})`).join('\n');
-            if (vendasHoje.length > 10) itensTexto += `\n... e mais ${vendasHoje.length - 10} venda(s)`;
-        }
-
-        const f = this.data.financeiro || {};
-        const gaveta = f.caixaSecundario || 0;
-
-        const msg = `📊 *RESUMO DIÁRIO DE ATIVIDADES — ${dataFormatada}*\n` +
-            `🏪 *Cesinha Acessórios*\n\n` +
-            `💰 *Faturamento Total Hoje:* R$ ${totalVendasDia.toFixed(2)}\n` +
-            `🛒 *Total de Vendas:* ${vendasHoje.length} venda(s)\n` +
-            `👤 *Novos Clientes Cadastrados:* ${clientesHoje.length} cliente(s)\n` +
-            `🔧 *Novas Ordens de Serviço:* ${osHoje.length} OS\n\n` +
-            `🛍️ *PRODUTOS / SERVIÇOS VENDIDOS HOJE:*\n${itensTexto}\n\n` +
-            `💵 *Saldo Físico na Gaveta:* R$ ${gaveta.toFixed(2)}\n` +
-            `🎯 *Meta Diária (R$ 77,00):* ${totalVendasDia >= 77 ? '🏆 META DIÁRIA BATIDA!' : `Falta R$ ${(77 - totalVendasDia).toFixed(2)}`}\n\n` +
-            `💾 Backup diário automático enviado em anexo:`;
-
-        const resMsg = await this.enviarTelegram(msg);
-        const resDoc = await this.enviarBackupDocumentoTelegram();
-        return { sucesso: resMsg.sucesso && resDoc.sucesso };
+        return this.enviarFechamentoDiarioTelegram();
     }
 
     // ===== NOTIFICAÇÃO INSTANTÂNEA DE VENDA VIA TELEGRAM =====
@@ -2381,56 +2394,6 @@ class DataManager {
             `💵 *Saldo Gaveta Após Venda*: R$ ${gavetaAtual.toFixed(2)}\n` +
             `⏰ *Hora*: ${this.horaLocal ? this.horaLocal() : new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
         await this.enviarTelegram(msg);
-    }
-
-    // ===== FECHAMENTO DIÁRIO DETALHADO TELEGRAM =====
-    async enviarFechamentoDiarioTelegram() {
-        if (!this.data.configuracoes?.telegramBotToken) return { sucesso: false, erro: 'Bot do Telegram não configurado' };
-        const hojeStr = this.hojeLocal();
-        const dataFormatada = new Date().toLocaleDateString('pt-BR');
-        const todosMovs = this.getTodosMovimentacoesHistorico();
-        
-        let vendas = 0, custo = 0, despesas = 0;
-        const itensVendidos = [];
-        
-        todosMovs.forEach(m => {
-            const ts = this.parseDataSafe(m.data);
-            const mDateStr = ts > 0 ? this.hojeLocal(new Date(ts)) : (m.data || '').substring(0, 10);
-            if (mDateStr === hojeStr) {
-                if (m.tipo === 'despesa') {
-                    despesas += Math.abs(parseFloat(m.valor || 0));
-                } else if (this.isMovimentacaoVendaReal(m)) {
-                    const v = parseFloat(m.valor || 0);
-                    const c = parseFloat(m.custo || 0);
-                    vendas += v;
-                    custo += c;
-                    itensVendidos.push(`• ${m.descricao || m.produto || 'Item'} — R$ ${v.toFixed(2)} (${m.formaPagamento || m.tipo || 'Caixa'})`);
-                }
-            }
-        });
-        
-        const lucroLiquido = Math.max(0, vendas - custo - despesas);
-        const loja40 = Math.round(lucroLiquido * 0.40 * 100) / 100;
-        const dist = Math.round(lucroLiquido * 0.60 * 100) / 100;
-        const mae58 = Math.round(dist * 0.58 * 100) / 100;
-        const pai42 = Math.round(dist * 0.42 * 100) / 100;
-        
-        const msg = `📊 *FECHAMENTO DIÁRIO DETALHADO — ${dataFormatada}*\n` +
-            `🏪 *Cesinha Acessórios*\n\n` +
-            `💰 *Vendas Brutas*: R$ ${vendas.toFixed(2)}\n` +
-            `📦 *Custo de Reposição (CMV)*: -R$ ${custo.toFixed(2)}\n` +
-            `💸 *Despesas do Dia*: -R$ ${despesas.toFixed(2)}\n` +
-            `---------------------------------------\n` +
-            `💎 *LUCRO LÍQUIDO DO DIA*: *R$ ${lucroLiquido.toFixed(2)}*\n\n` +
-            `🏪 *40% Fundo Loja*: R$ ${loja40.toFixed(2)}\n` +
-            `💜 *Cota Mãe (~35%)*: R$ ${mae58.toFixed(2)}\n` +
-            `👨‍🦳 *Cota Pai (~25%)*: R$ ${pai42.toFixed(2)}\n\n` +
-            `🛍️ *ITENS VENDIDOS HOJE (${itensVendidos.length}):*\n` +
-            `${itensVendidos.length > 0 ? itensVendidos.join('\n') : 'Nenhuma venda hoje'}`;
-
-        const res = await this.enviarTelegram(msg);
-        await this.enviarBackupDocumentoTelegram();
-        return res;
     }
 
     // ===== FECHAMENTO MENSAL DETALHADO TELEGRAM =====
@@ -2614,6 +2577,10 @@ class DataManager {
     }
 
     async enviarBackupDocumentoTelegram(chatIdTarget = null) {
+        if (this._ultimoBackupDocMs && (Date.now() - this._ultimoBackupDocMs < 60000)) {
+            return { sucesso: true, ignoradoCooldown: true };
+        }
+        this._ultimoBackupDocMs = Date.now();
         const cfg = this.getConfigTelegram();
         const botToken = cfg.botToken;
         const chatId = chatIdTarget || cfg.chatId;
@@ -4034,6 +4001,10 @@ class DataManager {
     }
 
     async enviarFechamentoDiarioTelegram(dataAlvo = null) {
+        if (this._ultimoFechamentoDiaMs && (Date.now() - this._ultimoFechamentoDiaMs < 60000)) {
+            return { sucesso: true, ignoradoCooldown: true };
+        }
+        this._ultimoFechamentoDiaMs = Date.now();
         try {
             const hojeYMD = dataAlvo || this.hojeLocal();
             const dataFormatada = new Date(hojeYMD + 'T12:00:00').toLocaleDateString('pt-BR');

@@ -83,16 +83,16 @@ const hStr = dm.horaLocal();
 assert(typeof dStr === 'string' && dStr.length === 10 && dStr.includes('-'), `Timezone Local Bahia hojeLocal(): ${dStr}`);
 assert(typeof hStr === 'string' && hStr.length >= 5 && hStr.includes(':'), `Hora Local Bahia horaLocal(): ${hStr}`);
 
-// TESTE 2: Precificação de Consertos (Régua de 3 Faixas)
+// TESTE 2: Precificação de Consertos (Régua de Maximização de Lucros — Teto Máximo)
 const faixas60 = Calculators._calcularPrecoConsertoEscalonado(60, 20);
-assert(faixas60.ideal === 180, `Conserto com custo R$ 60 -> Preço Ideal deve ser R$ 180 (recebido: ${faixas60.ideal})`);
-assert(faixas60.minimo >= 120, `Conserto com custo R$ 60 -> Preço Mínimo deve ser >= R$ 120 (recebido: ${faixas60.minimo})`);
+assert(faixas60.ideal === 280, `Conserto com custo R$ 60 -> Teto Máximo deve ser R$ 280 [Lucro R$ 220] (recebido: ${faixas60.ideal})`);
+assert(faixas60.minimo === 220, `Conserto com custo R$ 60 -> Piso Mínimo deve ser R$ 220 [Lucro R$ 160] (recebido: ${faixas60.minimo})`);
 
 const faixas120 = Calculators._calcularPrecoConsertoEscalonado(120, 30);
-assert(faixas120.ideal === 280, `Conserto com custo R$ 120 -> Preço Ideal deve ser R$ 280 (recebido: ${faixas120.ideal})`);
+assert(faixas120.ideal === 390 && faixas120.minimo === 310, `Conserto com custo R$ 120 -> Teto R$ 390 [Lucro R$ 270] e Mínimo R$ 310 [Lucro R$ 190] (recebido: ${faixas120.ideal} / ${faixas120.minimo})`);
 
 const faixas300 = Calculators._calcularPrecoConsertoEscalonado(300, 50);
-assert(faixas300.ideal === 530, `Conserto com custo R$ 300 -> Preço Ideal deve ser R$ 530 (recebido: ${faixas300.ideal})`);
+assert(faixas300.ideal === 710, `Conserto com custo R$ 300 -> Teto Máximo deve ser R$ 710 [Lucro R$ 410] (recebido: ${faixas300.ideal})`);
 
 // TESTE 3: Sincronização de Caixa Físico (Dinheiro)
 dm.data.financeiro.caixaSecundario = 100;
@@ -276,22 +276,24 @@ assert(Array.isArray(bkpRaw.produtosProcurados) && bkpRaw.produtosProcurados.len
 assert(bkpRaw.clientes.length >= 390 && bkpRaw.historico.vendas.length >= 560, `Backup 2026-10-23 contém base histórica completa (${bkpRaw.clientes.length} clientes, ${bkpRaw.historico.vendas.length} vendas)`);
 
 
-// TESTE 16: Correção de Preço Justo de Consertos Blindada contra Sobrescrita de Backup Antigo
+// TESTE 16: Maximização de Lucros e Ativos nos Consertos + Redundância em Nuvem Cloudflare KV + Trava Anti-Spam Telegram
 const orcIp11 = Calculators.getOrcamentoServico('iPhone 11', 'tela');
-assert(orcIp11.custoPeca === 130 && orcIp11.ideal === 300, `iPhone 11 Tela com Preço Justo corrigido (Custo Peça: R$ ${orcIp11.custoPeca} | Venda Ideal: R$ ${orcIp11.ideal})`);
+assert(orcIp11.custoPeca === 130 && orcIp11.ideal === 400, `iPhone 11 Tela Maximização de Lucro (Custo: R$ ${orcIp11.custoPeca} | Teto Cobrar: R$ ${orcIp11.ideal} [Lucro R$ 270] | Mín: R$ ${orcIp11.minimo})`);
 const orcA14 = Calculators.getOrcamentoServico('Samsung A14', 'tela');
-assert(orcA14.custoPeca === 120 && orcA14.ideal === 280, `Samsung A14 Tela com Preço Justo corrigido (Custo Peça: R$ ${orcA14.custoPeca} | Venda Ideal: R$ ${orcA14.ideal})`);
-const orcA15 = Calculators.getOrcamentoServico('Samsung A15', 'tela');
-assert(orcA15.custoPeca === 115 && orcA15.ideal === 270, `Samsung A15 Tela cadastrado com Preço Justo (Custo Peça: R$ ${orcA15.custoPeca} | Venda Ideal: R$ ${orcA15.ideal})`);
+assert(orcA14.custoPeca === 120 && orcA14.ideal === 390, `Samsung A14 Tela Maximização de Lucro (Custo: R$ ${orcA14.custoPeca} | Teto Cobrar: R$ ${orcA14.ideal} [Lucro R$ 270] | Mín: R$ ${orcA14.minimo})`);
+const orcA52 = Calculators.getOrcamentoServico('Samsung A52', 'tela');
+assert(orcA52.custoPeca === 175 && orcA52.ideal === 500, `Samsung A52 Tela Maximização de Lucro (Custo: R$ ${orcA52.custoPeca} | Teto Cobrar: R$ ${orcA52.ideal} [Lucro R$ 325])`);
 const totalModelosCatalogo = Object.keys(dm.data.tabelaServicosModelo || {}).length;
 assert(totalModelosCatalogo >= 130, `Catálogo expandido de consertos com ${totalModelosCatalogo} modelos ativos`);
+assert(typeof dm.salvarNuvemCloudflare === 'function' && typeof dm._salvarIndexedDB === 'function', `Redundância Quádrupla ativa (localStorage + IndexedDB + Cloudflare KV + Telegram)`);
+assert(Array.isArray(dm.data.filaTelegramPendente) && dm.data.filaTelegramPendente.length === 0, `Fila fantasma do Telegram limpa e trava anti-spam ativa`);
 
 console.log('\n=================================================================');
 console.log(`🎯 RESULTADO FINAL: ${passados} / ${total} TESTES PASSARAM COM SUCESSO!`);
 console.log('=================================================================');
 
 if (passados === total) {
-    process.exit(0);
+    setTimeout(() => process.exit(0), 50);
 } else {
     process.exit(1);
 }

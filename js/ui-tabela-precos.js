@@ -121,9 +121,12 @@ UI._renderLinhasModelos = function (modelos) {
                 const cBat = s.bateria ? s.bateria.p : 0;
                 const cCon = s.conector ? s.conector.p : 0;
 
-                // Sugestão de venda calculada pela régua justa
-                const sugTela = cTela > 0 ? (cTela <= 80 ? Math.max(cTela * 3, 80) : (cTela <= 200 ? cTela * 2 + 40 : Math.ceil(cTela * 1.5 + 80))) : 0;
-                const sugBat = cBat > 0 ? (cBat <= 80 ? Math.max(cBat * 2.5, 70) : cBat * 1.8 + 30) : 0;
+                // Sugestão de venda calculada pela Régua de Maximização de Lucro (Teto Máximo)
+                const faixasT = cTela > 0 ? Calculators._calcularPrecoConsertoEscalonado(cTela, 50) : { maximo: 0, minimo: 0 };
+                const sugTela = faixasT.maximo;
+                const minTela = faixasT.minimo;
+                const faixasB = cBat > 0 ? Calculators._calcularPrecoConsertoEscalonado(cBat, 35) : { maximo: 0 };
+                const sugBat = faixasB.maximo;
 
                 return `
                 <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
@@ -131,7 +134,7 @@ UI._renderLinhasModelos = function (modelos) {
                         ${m}
                     </td>
                     <td style="padding:10px 12px;">
-                        ${cTela > 0 ? `<span style="color:#00FFA3; font-weight:700;">R$ ${cTela}</span> <span style="color:var(--text-muted);font-size:11px;">(Venda: R$ ${sugTela})</span>` : '<span style="color:#f59e0b; background:rgba(245,158,11,0.1); padding:2px 6px; border-radius:4px; font-size:11px;">⚠️ Sem Custo</span>'}
+                        ${cTela > 0 ? `<span style="color:#00FFA3; font-weight:700;">R$ ${cTela}</span> <span style="color:var(--text-muted);font-size:11px;">(Cobrar Teto: R$ ${sugTela} | Mín: R$ ${minTela})</span>` : '<span style="color:#f59e0b; background:rgba(245,158,11,0.1); padding:2px 6px; border-radius:4px; font-size:11px;">⚠️ Sem Custo</span>'}
                     </td>
                     <td style="padding:10px 12px;">
                         ${cBat > 0 ? `<span style="color:#00FFA3; font-weight:700;">R$ ${cBat}</span> <span style="color:var(--text-muted);font-size:11px;">(Venda: R$ ${Math.round(sugBat)})</span>` : '<span style="color:var(--text-muted); font-size:11px;">-</span>'}
