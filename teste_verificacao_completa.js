@@ -288,6 +288,32 @@ assert(totalModelosCatalogo >= 130, `Catálogo expandido de consertos com ${tota
 assert(typeof dm.salvarNuvemCloudflare === 'function' && typeof dm._salvarIndexedDB === 'function', `Redundância Quádrupla ativa (localStorage + IndexedDB + Cloudflare KV + Telegram)`);
 assert(Array.isArray(dm.data.filaTelegramPendente) && dm.data.filaTelegramPendente.length === 0, `Fila fantasma do Telegram limpa e trava anti-spam ativa`);
 
+// TESTE 17: Meta R$ 7.000, Zeramento Automático Dia 30 (Caixa Principal + Meta), Botão "Já fizemos pedido" e Zerar Bloco de Notas
+const progMeta = dm.calcularProgressoMeta();
+assert(progMeta.objetivo === 7000 && dm.data.meta.objetivo === 7000, `Alvo da Meta atualizado para R$ 7.000,00 (obtido: R$ ${progMeta.objetivo})`);
+
+dm.data.financeiro.caixaPrincipal = 4500;
+dm.data.financeiro.caixaSecundario = 850;
+dm.data.comissaoIlannaMensal = 3200;
+dm.data.historico.vendas.push({ id: 88801, data: '2026-08-15', produto: 'Capinha Antiga', valorVenda: 50, custo: 10, lucro: 40 });
+dm.executarZeramentoCicloMensal('2026-10-dia30', '2026-10-30', 'Teste Zeramento Dia 30');
+assert(dm.data.financeiro.caixaPrincipal === 0, `Caixa Principal zerado automaticamente no ciclo Dia 30 (obtido: ${dm.data.financeiro.caixaPrincipal})`);
+assert(dm.data.financeiro.caixaSecundario === 0, `Caixa Secundário zerado automaticamente no ciclo Dia 30 (obtido: ${dm.data.financeiro.caixaSecundario})`);
+assert(dm.data.comissaoIlannaMensal === 0 && dm.calcularComissaoIlannaReal() === 0, `Meta acumulada zerada no ciclo Dia 30 sem puxar meses antigos (obtido: ${dm.calcularComissaoIlannaReal()})`);
+
+dm.adicionarProdutoProcurado('Cabo Original iPhone 15', 'Cliente pediu 2x', 'Atendente');
+assert(dm.getProdutosProcurados().length > 0, `Produto em falta adicionado antes do pedido`);
+dm.zerarProdutosProcurados();
+assert(dm.getProdutosProcurados().length === 0, `Botão "Já fizemos pedido" (zerarProdutosProcurados) zerou toda a lista de faltas para começar do zero`);
+
+dm.data.blocoNotas = { '1001': { texto: 'Nota antiga de meses atrás', dataHora: '01/09/2026' } };
+dm.zerarBlocoNotas();
+assert(Object.keys(dm.data.blocoNotas).length === 0, `Botão Zerar Bloco de Notas (zerarBlocoNotas) limpou todas as anotações acumuladas`);
+
+const uiVendedorTxt = fs.readFileSync(path.join(__dirname, 'js', 'ui-vendedor.js'), 'utf8');
+assert(uiVendedorTxt.includes('Já fizemos pedido') && uiVendedorTxt.includes('_zerarTodosProcurados'), `Botão "✅ Já fizemos pedido" presente no widget de Produtos em Falta`);
+assert(uiVendedorTxt.includes('Zerar Bloco de Notas') && uiVendedorTxt.includes('_zerarBlocoNotasCompleto'), `Botão "🗑️ Zerar Bloco de Notas" presente no widget de Bloco de Notas`);
+
 console.log('\n=================================================================');
 console.log(`🎯 RESULTADO FINAL: ${passados} / ${total} TESTES PASSARAM COM SUCESSO!`);
 console.log('=================================================================');

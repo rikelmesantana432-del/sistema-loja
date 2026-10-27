@@ -303,7 +303,7 @@ UI._obterWidgetMetaIlanna = function () {
     const totalVendasMes = (dataManager && typeof dataManager.calcularComissaoIlannaReal === 'function')
         ? dataManager.calcularComissaoIlannaReal()
         : (dataManager.data.comissaoIlannaMensal || 0);
-    const meta = 2400;
+    const meta = 7000;
     const percentual = Math.min(100, (totalVendasMes / meta) * 100);
     const excedente = Math.max(0, totalVendasMes - meta);
     const comissao = excedente * 0.1;
@@ -338,7 +338,7 @@ UI._obterWidgetMetaIlanna = function () {
         <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px;">
             <span style="font-size:24px; font-weight:850; color:#FFFFFF; font-family:'Space Grotesk',sans-serif;">${UI.R(totalVendasMes)} <span style="font-size:12px;color:var(--text-muted);font-weight:400;font-family:inherit;">acumulado</span></span>
             <div style="text-align:right;">
-                <div style="font-size:12px; color:var(--text-muted);">Alvo: <strong>${UI.R(meta)}</strong></div>
+                <div style="font-size:12px; color:var(--text-muted);">Alvo: <strong>${UI.R(meta)}</strong> <span style="font-size:10px;color:#a855f7;">(Zera todo dia 30)</span></div>
                 <div style="font-size:10px; color:#00c8ff; font-weight:600; margin-top:3px; background:rgba(0,200,255,0.08); padding:2px 8px; border-radius:6px; display:inline-block;">📱 Cel: 3% | 🔧 Consertos & 🛒 Acessórios: lucro total</div>
             </div>
         </div>
@@ -363,7 +363,7 @@ UI._verDashboardDesempenhoVendedor = function () {
     const totalVendasMes = (dataManager && typeof dataManager.calcularComissaoIlannaReal === 'function')
         ? dataManager.calcularComissaoIlannaReal()
         : (dataManager.data.comissaoIlannaMensal || 0);
-    const meta = 2400;
+    const meta = 7000;
     const percentual = Math.min(100, (totalVendasMes / meta) * 100);
     const excedente = Math.max(0, totalVendasMes - meta);
     const comissao = excedente * 0.1;
@@ -413,7 +413,7 @@ UI._verDashboardDesempenhoVendedor = function () {
             <div style="background:rgba(20,24,38,0.9);border:1px solid rgba(236,72,153,0.3);border-radius:14px;padding:16px;text-align:center;">
                 <div style="font-size:13px;color:var(--text-muted);font-weight:700;text-transform:uppercase;">Comissão Acumulada</div>
                 <div style="font-size:28px;font-weight:900;color:${comissao > 0 ? '#00d97e' : '#ec4899'};margin:6px 0;">${UI.R(comissao)}</div>
-                <div style="font-size:12px;color:var(--text-secondary);">${totalVendasMes >= meta ? '🎉 10% de bônus liberado!' : 'Liberada ao atingir R$ 2.400'}</div>
+                <div style="font-size:12px;color:var(--text-secondary);">${totalVendasMes >= meta ? '🎉 10% de bônus liberado!' : 'Liberada ao atingir R$ 7.000'}</div>
             </div>
         </div>
 
@@ -531,7 +531,7 @@ UI._renderGraficoVendedorDiario = function (container, diasNoMes, diaAtual, tota
 
 UI._enviarRelatorioVendedorWhatsApp = function () {
     const totalVendasMes = dataManager.data.comissaoIlannaMensal || 0;
-    const meta = 2400;
+    const meta = 7000;
     const percentual = Math.min(100, (totalVendasMes / meta) * 100);
     const excedente = Math.max(0, totalVendasMes - meta);
     const comissao = excedente * 0.1;
@@ -1881,9 +1881,14 @@ UI._vendedorEncomendas = function () {
         
         <div class="vendedor-section" style="max-width:800px;margin:0 auto">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
-                <button class="btn btn-lg" style="background:#a855f7;color:#fff;font-size:18px;font-weight:900;padding:14px 24px;border:none;box-shadow:0 4px 15px rgba(168,85,247,0.3)" onclick="UI._vendedorNovaEncomendaStart()">
-                    ➕ Anotar Nova Encomenda de Cliente
-                </button>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                    <button class="btn btn-lg" style="background:#a855f7;color:#fff;font-size:18px;font-weight:900;padding:14px 24px;border:none;box-shadow:0 4px 15px rgba(168,85,247,0.3)" onclick="UI._vendedorNovaEncomendaStart()">
+                        ➕ Anotar Nova Encomenda de Cliente
+                    </button>
+                    <button class="btn btn-lg" style="background:#10b981;color:#fff;font-size:16px;font-weight:900;padding:14px 20px;border:none;box-shadow:0 4px 15px rgba(16,185,129,0.3)" onclick="UI._zerarTodasEncomendas()">
+                        ✅ Já fizemos pedido
+                    </button>
+                </div>
                 <div style="font-size:14px;color:var(--text-muted);font-weight:700;">Total: ${encomendas.length} encomendados</div>
             </div>
 
@@ -2069,9 +2074,14 @@ UI._obterWidgetBlocoNotas = function () {
 
     return `
     <div id="widget-bloco-notas-container" style="margin: 20px auto; padding: 18px; background: rgba(15, 20, 32, 0.9); border: 1px solid rgba(255, 215, 0, 0.2); border-radius: 16px; max-width: 650px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-            <h3 style="font-size:16px;color:#FFD700;margin:0;font-weight:800">📝 BLOCO DE NOTAS & RECADOS</h3>
-            <span style="font-size:11px;color:var(--text-muted);">Salvo no sistema & nuvem</span>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+            <div>
+                <h3 style="font-size:16px;color:#FFD700;margin:0;font-weight:800">📝 BLOCO DE NOTAS & RECADOS</h3>
+                <span style="font-size:11px;color:var(--text-muted);">Salvo no sistema & nuvem</span>
+            </div>
+            <button class="btn btn-sm" style="background:rgba(239,68,68,0.18);color:#ff6b6b;border:1px solid rgba(239,68,68,0.4);font-weight:800;font-size:12px;padding:6px 12px;border-radius:8px;cursor:pointer;" onclick="UI._zerarBlocoNotasCompleto()">
+                🗑️ Zerar Bloco de Notas
+            </button>
         </div>
         
         <div style="display:flex;gap:8px;margin-bottom:14px;">
@@ -2247,6 +2257,26 @@ UI._deletarNotaBloco = function (id) {
         } else if (typeof UI.render === 'function') {
             UI.render();
         }
+    }
+};
+
+UI._zerarBlocoNotasCompleto = function () {
+    if (typeof dataManager.zerarBlocoNotas === 'function') {
+        dataManager.zerarBlocoNotas();
+    } else {
+        dataManager.data.blocoNotas = {};
+        dataManager.data._ultimoSaveLocal = Date.now();
+        dataManager.saveData();
+    }
+    UI.toast('🗑️ Bloco de Notas zerado com sucesso! Pronto para novas anotações do zero.', 'success');
+
+    const container = document.getElementById('widget-bloco-notas-container');
+    if (container) {
+        container.outerHTML = UI._obterWidgetBlocoNotas();
+    } else if (UI.paginaAtual === 'vendedor') {
+        UI.renderVendedor();
+    } else if (typeof UI.render === 'function') {
+        UI.render();
     }
 };
 
@@ -2465,6 +2495,35 @@ UI._deletarProcurado = function (id) {
     if (UI.paginaAtual === 'vendedor') UI.renderVendedor(); else UI.render();
 };
 
+UI._zerarTodosProcurados = function () {
+    if (typeof dataManager.zerarProdutosProcurados === 'function') {
+        dataManager.zerarProdutosProcurados();
+    } else {
+        dataManager.data.produtosProcurados = [];
+        dataManager.saveData();
+    }
+    UI.toast('✅ Já fizemos pedido! Lista de faltas zerada para começar do zero.', 'success');
+    const container = document.getElementById('widget-produtos-procurados-container');
+    if (container) {
+        container.outerHTML = UI._obterWidgetProdutosProcurados();
+    } else if (UI.paginaAtual === 'vendedor') {
+        UI.renderVendedor();
+    } else if (typeof UI.render === 'function') {
+        UI.render();
+    }
+};
+
+UI._zerarTodasEncomendas = function () {
+    if (typeof dataManager.zerarEncomendasClientes === 'function') {
+        dataManager.zerarEncomendasClientes();
+    } else {
+        dataManager.data.encomendas = [];
+        dataManager.saveData();
+    }
+    UI.toast('✅ Já fizemos pedido! Lista de encomendas zerada para começar do zero.', 'success');
+    UI._vendedorEncomendas();
+};
+
 UI._obterWidgetProdutosProcurados = function () {
     const procurados = dataManager.getProdutosProcurados();
     
@@ -2493,11 +2552,16 @@ UI._obterWidgetProdutosProcurados = function () {
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
                 <div>
                     <h3 style="font-size:20px;color:#ef4444;margin:0;font-weight:800;">📋 PRODUTOS EM FALTA & PROCURADOS POR CLIENTES (${procurados.length})</h3>
-                    <div style="font-size:13px;color:var(--text-muted);margin-top:2px;">Produtos que os clientes procuraram na loja e não tính tínhamos no estoque</div>
+                    <div style="font-size:13px;color:var(--text-muted);margin-top:2px;">Produtos que os clientes procuraram na loja e não tínhamos no estoque</div>
                 </div>
-                <button class="btn btn-sm" style="background:#ef4444;color:#fff;font-weight:900;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;" onclick="UI._vendedorRegistrarFalta()">
-                    ⚠️ + REGISTRAR PRODUTO EM FALTA
-                </button>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                    <button class="btn btn-sm" style="background:#10b981;color:#fff;font-weight:900;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;box-shadow:0 4px 12px rgba(16,185,129,0.25);" onclick="UI._zerarTodosProcurados()">
+                        ✅ Já fizemos pedido
+                    </button>
+                    <button class="btn btn-sm" style="background:#ef4444;color:#fff;font-weight:900;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;" onclick="UI._vendedorRegistrarFalta()">
+                        ⚠️ + REGISTRAR PRODUTO EM FALTA
+                    </button>
+                </div>
             </div>
 
             <div style="max-height:300px;overflow-y:auto;">

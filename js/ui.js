@@ -288,14 +288,22 @@ const UI = {
             <div class="hero-section" style="padding: 24px 16px;">
                 <div style="display:flex; justify-content:center; gap:24px; align-items:center; flex-wrap:wrap;">
                     <div style="text-align:center;">
-                        <div class="hero-value" style="font-size:36px; color:var(--accent-purple);">${this.R(f.caixaSecundario || 0)}</div>
+                        <div class="hero-value" style="font-size:32px; color:#10b981;">${this.R(f.caixaPrincipal || 0)}</div>
+                        <div class="hero-label" style="font-size:12px; color:#10b981;">Caixa Principal (Zera dia 30)</div>
+                    </div>
+                    <div style="width:1px; height:45px; background:rgba(255,255,255,0.15)"></div>
+                    <div style="text-align:center;">
+                        <div class="hero-value" style="font-size:32px; color:var(--accent-purple);">${this.R(f.caixaSecundario || 0)}</div>
                         <div class="hero-label" style="font-size:12px; color:var(--accent-purple);">Caixa Balcão / Gaveta</div>
                     </div>
                     <div style="width:1px; height:45px; background:rgba(255,255,255,0.15)"></div>
                     <div style="text-align:center;">
-                        <div class="hero-value" style="font-size:36px; color:#f97316;">${this.R(f.caixaFogos || 0)}</div>
+                        <div class="hero-value" style="font-size:32px; color:#f97316;">${this.R(f.caixaFogos || 0)}</div>
                         <div class="hero-label" style="font-size:12px; color:#f97316;">Caixa de Fogos</div>
                     </div>
+                </div>
+                <div style="text-align:center;margin-top:10px;font-size:12px;color:var(--text-muted);">
+                    🎯 Alvo da Meta: <strong style="color:#FFD700;">R$ 7.000,00</strong> • 🔄 Zeramento Automático: <strong>Todo dia 30 / Início de Mês</strong>
                 </div>
             </div>`;
         }
@@ -360,6 +368,16 @@ const UI = {
         // === GRÁFICO DE VENDAS ===
         html += `<h3 class="dash-section-title" style="margin-top:20px">📈 VENDAS — ÚLTIMOS 7 DIAS</h3>`;
         html += `<div id="grafico-vendas" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,215,0,0.08);border-radius:12px;padding:8px;min-height:220px"></div>`;
+
+        // === CARD DE META MENSAL (ALVO R$ 7.000,00 - ZERA TODO DIA 30) ===
+        if (typeof UI._obterWidgetMetaIlanna === 'function') {
+            html += UI._obterWidgetMetaIlanna();
+        }
+
+        // === PRODUTOS EM FALTA & PROCURADOS POR CLIENTES ===
+        if (typeof UI._obterWidgetProdutosProcurados === 'function') {
+            html += UI._obterWidgetProdutosProcurados();
+        }
 
         // === BLOCO DE NOTAS & RECADOS ===
         if (typeof UI._obterWidgetBlocoNotas === 'function') {

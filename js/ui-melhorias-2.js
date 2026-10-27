@@ -877,7 +877,7 @@ UI._gerarDadosRelatorioSemanalHTML = function () {
     
     // Vendas totais do mês baseadas no Caixa Secundário (Termômetro Ilanna)
     const totalVendasMes = f.caixaSecundario || 0;
-    const meta = 2400;
+    const meta = 7000;
     const excedente = Math.max(0, totalVendasMes - meta);
     const comissao = excedente * 0.1;
     const lucroMes = totalVendasMes * 0.45; // Estimativa média de 45% de margem real

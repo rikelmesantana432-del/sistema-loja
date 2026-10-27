@@ -91,51 +91,125 @@ class DataManager {
         }
     }
 
+    executarZeramentoCicloMensal(cicloId, dataRefYMD = null, motivo = 'Zeramento Automático Mensal (Dia 30 / Início de Mês)') {
+        const hojeYMD = dataRefYMD || this.hojeLocal();
+        const saldoPrincipalAnterior = this.data.financeiro?.caixaPrincipal || 0;
+        const saldoGavetaAnterior = this.data.financeiro?.caixaSecundario || 0;
+        const metaAnterior = this.data.comissaoIlannaMensal || 0;
+
+        if (!this.data.historicoFechamentoMensal) this.data.historicoFechamentoMensal = [];
+        this.data.historicoFechamentoMensal.push({
+            mes: cicloId,
+            saldoCaixaPrincipalFinal: saldoPrincipalAnterior,
+            saldoGavetaFinal: saldoGavetaAnterior,
+            metaAcumuladaFinal: metaAnterior,
+            objetivoMeta: 7000,
+            motivo,
+            dataFechamento: new Date().toISOString()
+        });
+
+        if (!this.data.historicoFechamentoComissao) this.data.historicoFechamentoComissao = [];
+        this.data.historicoFechamentoComissao.push({
+            ciclo: cicloId,
+            comissaoFinal: metaAnterior,
+            logDetalhado: this.data.logComissaoMensal || [],
+            dataFechamento: new Date().toISOString()
+        });
+
+        // Zera Caixa Principal, Caixa Secundário (Gaveta) e Meta para o novo ciclo
+        if (!this.data.financeiro) this.data.financeiro = {};
+        this.data.financeiro.caixaPrincipal = 0;
+        this.data.financeiro.caixaSecundario = 0;
+        this.data.comissaoIlannaMensal = 0;
+        this.data.logComissaoMensal = [];
+        this.data.dataInicioCicloMeta = hojeYMD;
+        this.data.timestampInicioCicloMeta = new Date().toISOString();
+        this.data.ultimoCicloZeradoDia30 = cicloId;
+
+        if (!this.data.meta) this.data.meta = {};
+        this.data.meta.nome = '🎯 Meta Mensal da Loja';
+        this.data.meta.objetivo = 7000;
+        this.data.meta.diaZeramento = 30;
+        this.data.meta.progressoAtual = 0;
+        this.data.meta.ultimoZeramento = hojeYMD;
+
+        // Marca vendas anteriores como pertencentes ao ciclo fechado (preserva histórico sem acumular na nova meta)
+        if (this.data.historico && Array.isArray(this.data.historico.vendas)) {
+            this.data.historico.vendas.forEach(v => {
+                if (!v._cicloMetaFechado) {
+                    v._cicloMetaFechado = cicloId;
+                }
+            });
+        }
+
+        if (!this.data.movimentacoesCaixa) this.data.movimentacoesCaixa = [];
+        this.data.movimentacoesCaixa.push({
+            tipo: 'virada_mes_auto',
+            caixa: 'caixaPrincipal_e_Meta',
+            valorAnterior: saldoPrincipalAnterior,
+            saldoGavetaAnterior,
+            metaAnterior,
+            descricao: `🔒 ${motivo} (${cicloId}): Caixa Principal, Gaveta e Meta (Alvo R$ 7.000,00) zerados para novo ciclo.`,
+            data: new Date().toISOString()
+        });
+
+        this.saveData();
+        console.log(`[StrategyOS] Zeramento automático do ciclo (${cicloId}) concluído: Caixa Principal, Gaveta e Meta zerados.`);
+        return {
+            sucesso: true,
+            cicloId,
+            saldoPrincipalAnterior,
+            saldoGavetaAnterior,
+            metaAnterior
+        };
+    }
+
     verificarViradaDeMes() {
         try {
             const hojeYMD = this.hojeLocal();
             const anoMes = hojeYMD.substring(0, 7); // ex: '2026-10'
+            const dia = parseInt(hojeYMD.substring(8, 10), 10);
 
-            // 1. ZERAMENTO MENSAL AUTOMÁTICO DO CAIXA GAVETA (Elimina valores fantasmas acumulados)
+            // Garante alvo da meta em R$ 7.000,00 e regra do dia 30
+            if (!this.data.meta) this.data.meta = {};
+            this.data.meta.objetivo = 7000;
+            this.data.meta.diaZeramento = 30;
+
+            // 1. REGRA DO DIA 30: Todo dia 30 (ou >= 30), zera automaticamente Caixa Principal, Gaveta e Meta
+            if (dia >= 30) {
+                const cicloDia30 = `${anoMes}-dia30`;
+                if (this.data.ultimoCicloZeradoDia30 !== cicloDia30) {
+                    this.executarZeramentoCicloMensal(
+                        cicloDia30,
+                        hojeYMD,
+                        `FECHAMENTO AUTOMÁTICO DIA 30 (${hojeYMD})`
+                    );
+                    this.data.ultimoMesFechado = anoMes;
+                    this.saveData();
+                }
+            }
+
+            // 2. REGRA DE VIRADA DE MÊS (Dia 01 / Início de novo mês):
             if (!this.data.ultimoMesFechado) {
                 this.data.ultimoMesFechado = anoMes;
                 this.saveData();
             } else if (this.data.ultimoMesFechado !== anoMes) {
                 const mesAnterior = this.data.ultimoMesFechado;
-                const saldoGavetaAnterior = this.data.financeiro?.caixaSecundario || 0;
+                const cicloDia30MesAnterior = `${mesAnterior}-dia30`;
+                const jaZerouNoDia30Anterior = (this.data.ultimoCicloZeradoDia30 === cicloDia30MesAnterior);
 
-                if (!this.data.historicoFechamentoMensal) this.data.historicoFechamentoMensal = [];
-                this.data.historicoFechamentoMensal.push({
-                    mes: mesAnterior,
-                    saldoGavetaFinal: saldoGavetaAnterior,
-                    dataFechamento: new Date().toISOString()
-                });
-
-                // Zera gaveta para o novo mês (sem apagar histórico de vendas ou DRE)
-                if (this.data.financeiro) {
-                    this.data.financeiro.caixaSecundario = 0;
+                if (!jaZerouNoDia30Anterior) {
+                    this.executarZeramentoCicloMensal(
+                        `${anoMes}-inicio`,
+                        hojeYMD,
+                        `FECHAMENTO AUTOMÁTICO DE INÍCIO DE MÊS (${mesAnterior} -> ${anoMes})`
+                    );
                 }
-
-                if (!this.data.movimentacoesCaixa) this.data.movimentacoesCaixa = [];
-                this.data.movimentacoesCaixa.push({
-                    tipo: 'virada_mes_auto',
-                    caixa: 'caixaSecundario',
-                    valorAnterior: saldoGavetaAnterior,
-                    descricao: `🔒 FECHAMENTO AUTOMÁTICO DO MÊS (${mesAnterior}): Gaveta zerada para novo ciclo contábil.`,
-                    data: new Date().toISOString()
-                });
-
                 this.data.ultimoMesFechado = anoMes;
                 this.saveData();
-                console.log(`[StrategyOS] Virada de mês executada (${mesAnterior} -> ${anoMes}). Caixa gaveta zerado com sucesso.`);
-
-                try {
-                    // Envio automático mensal no boot desativado para evitar relatórios fantasmas
-                } catch(e) { console.warn('Erro ao disparar fechamento mensal no Telegram:', e); }
             }
 
-            // 2. Ciclo de comissão da Ilanna (após dia 25)
-            const dia = parseInt(hojeYMD.substring(8, 10));
+            // 3. Snapshot adicional pós-dia 25 para histórico de comissão
             if (dia > 25) {
                 const cicloId = `${anoMes}-pos25`;
                 if (!this.data.ultimoCicloComissaoIlanna) {
@@ -153,16 +227,20 @@ class DataManager {
                     });
                     this.data.ultimoCicloComissaoIlanna = cicloId;
                     this.saveData();
-                    console.log(`[StrategyOS] Snapshot do ciclo de comissão (${cicloId}) gravado.`);
                 }
             }
         } catch (e) {
-            console.error('Erro na verificação de ciclo de comissão:', e);
+            console.error('Erro na verificação de virada de mês / dia 30:', e);
         }
     }
 
-    calcularComissaoIlanna(modo = 'liquida', meta = 2400) {
-        const vendasHist = this.data.historico?.vendas || [];
+    calcularComissaoIlanna(modo = 'liquida', meta = 7000) {
+        const dataInicioCiclo = this.data.dataInicioCicloMeta || '';
+        const vendasHist = (this.data.historico?.vendas || []).filter(v => {
+            if (v._cicloMetaFechado) return false;
+            if (dataInicioCiclo && (v.data || '').substring(0, 10) < dataInicioCiclo) return false;
+            return true;
+        });
         const vendasIlanna = vendasHist.filter(v => /(ilanna|atendente|vendedor)/i.test(v.vendedor || '') || v._modo === 'vendedor');
         const totalBruto = vendasIlanna.reduce((s, v) => s + (v.valorVenda || v.valorFinal || v.valor || 0), 0);
         const totalCusto = vendasIlanna.reduce((s, v) => s + (v.custo || 0), 0);
@@ -366,10 +444,10 @@ class DataManager {
             },
 
             // === CAIXAS SEPARADOS (INÍCIO LIMPO ZERADO) ===
-            comissaoIlannaMensal: 1001.95,
+            comissaoIlannaMensal: 0,
             financeiro: {
                 caixaPrincipal: 0,
-                caixaSecundario: 962.25,
+                caixaSecundario: 0,
                 caixaTerciario: 0,
                 caixaFogos: 0,
                 caixaAcessorios: 0,
@@ -377,13 +455,14 @@ class DataManager {
                 reservaEmergencia: 0
             },
 
-            // === META ÚNICA ===
+            // === META MENSAL (ALVO R$ 7.000,00 — ZERA DIA 30 / INÍCIO DO MÊS) ===
             meta: {
-                nome: '🇵🇾 Meta Paraguai',
-                objetivo: 20000,
+                nome: '🎯 Meta Mensal da Loja',
+                objetivo: 7000,
+                diaZeramento: 30,
                 prazo: '2026-12-31',
-                descricao: 'Juntar R$ 20.000 para viagem ao Paraguai — compra de estoque',
-                dataInicio: '2026-02-19'
+                descricao: 'Meta mensal de R$ 7.000,00 — Zera automaticamente todo dia 30 / início de mês',
+                dataInicio: '2026-10-01'
             },
 
             // === 3 ESTOQUES ===
@@ -934,13 +1013,23 @@ class DataManager {
                 }
                 // ==============================================================================
                 
-                // === CÁLCULO DINÂMICO E AUDITORIA DA COMISSÃO DE ILANNA (MÊS CORRENTE) ===
+                // === META MENSAL FIXADA EM R$ 7.000,00 COM ZERAMENTO AUTOMÁTICO DIA 30 ===
+                if (!merged.meta) merged.meta = {};
+                merged.meta.objetivo = 7000;
+                merged.meta.diaZeramento = 30;
+                merged.meta.nome = '🎯 Meta Mensal da Loja';
+
+                // === CÁLCULO DINÂMICO E AUDITORIA DA META / COMISSÃO (CICLO CORRENTE) ===
                 const mesAtual = (merged.ultimoMesFechado || this.hojeLocal().substring(0, 7));
+                const dataInicioCiclo = merged.dataInicioCicloMeta || '';
                 let comissaoCalculada = 0;
                 if (merged.historico && Array.isArray(merged.historico.vendas)) {
                     merged.historico.vendas.forEach(v => {
+                        if (v._cicloMetaFechado) return;
+                        const dataYMD = (v.data || '').substring(0, 10);
+                        if (dataInicioCiclo && dataYMD < dataInicioCiclo) return;
                         const dt = (v.data || '').substring(0, 7);
-                        if (dt === mesAtual) {
+                        if (dt === mesAtual || (dataInicioCiclo && dataYMD >= dataInicioCiclo)) {
                             const prod = (v.produto || '').toLowerCase();
                             const tipo = (v.tipo || '').toLowerCase();
                             const isFogos = tipo === 'fogos' || prod.includes('fogo') || prod.includes('19x4') || prod.includes('12x1') || prod.includes('foguete');
@@ -1295,6 +1384,49 @@ class DataManager {
         if (!this.data.produtosProcurados) return;
         this.data.produtosProcurados = this.data.produtosProcurados.filter(p => String(p.id) !== String(id));
         this.saveData();
+    }
+
+    zerarProdutosProcurados() {
+        const anteriores = Array.isArray(this.data.produtosProcurados) ? this.data.produtosProcurados.length : 0;
+        if (anteriores > 0) {
+            if (!this.data.historicoPedidosFaltas) this.data.historicoPedidosFaltas = [];
+            this.data.historicoPedidosFaltas.push({
+                dataPedido: new Date().toISOString(),
+                quantidadeItens: anteriores,
+                itens: [...this.data.produtosProcurados]
+            });
+        }
+        this.data.produtosProcurados = [];
+        this.data._ultimoSaveLocal = Date.now();
+        this.saveData();
+        if (this.supabase) this.salvarSupabase();
+        return { sucesso: true, zerados: anteriores };
+    }
+
+    zerarEncomendasClientes() {
+        const anteriores = Array.isArray(this.data.encomendas) ? this.data.encomendas.length : 0;
+        if (anteriores > 0) {
+            if (!this.data.historicoEncomendas) this.data.historicoEncomendas = [];
+            this.data.historicoEncomendas.push({
+                dataPedido: new Date().toISOString(),
+                quantidadeItens: anteriores,
+                itens: [...this.data.encomendas]
+            });
+        }
+        this.data.encomendas = [];
+        this.data._ultimoSaveLocal = Date.now();
+        this.saveData();
+        if (this.supabase) this.salvarSupabase();
+        return { sucesso: true, zerados: anteriores };
+    }
+
+    zerarBlocoNotas() {
+        const anteriores = this.data.blocoNotas ? Object.keys(this.data.blocoNotas).length : 0;
+        this.data.blocoNotas = {};
+        this.data._ultimoSaveLocal = Date.now();
+        this.saveData();
+        if (this.supabase) this.salvarSupabase();
+        return { sucesso: true, zerados: anteriores };
     }
 
     // ===== LIMPEZA AUTOMÁTICA DE DUPLICATAS DE OS =====
@@ -1726,17 +1858,21 @@ class DataManager {
     }
 
     calcularProgressoMeta() {
-        const caixa = this.data.financeiro.caixaPrincipal;
-        const credEmDia = this.calcularCrediariosEmDia();
-        const progresso = caixa + (credEmDia * 0.5);
-        const objetivo = this.data.meta.objetivo;
+        const caixa = this.data.financeiro?.caixaPrincipal || 0;
+        const metaVendas = this.data.comissaoIlannaMensal || 0;
+        const progresso = Math.max(caixa, metaVendas);
+        const objetivo = 7000;
+        if (this.data.meta) {
+            this.data.meta.objetivo = 7000;
+            this.data.meta.diaZeramento = 30;
+        }
         const falta = Math.max(0, objetivo - progresso);
         const pct = Math.min(100, (progresso / objetivo) * 100);
         const hoje = new Date();
-        const prazo = new Date(this.data.meta.prazo);
-        const mesesRestantes = Math.max(1, (prazo - hoje) / (30 * 24 * 60 * 60 * 1000));
-        const metaMensal = falta / mesesRestantes;
-        return { progresso, objetivo, falta, pct, metaMensal, mesesRestantes: Math.round(mesesRestantes) };
+        const diaAtual = hoje.getDate();
+        const diasAteDia30 = diaAtual < 30 ? (30 - diaAtual) : 30;
+        const metaMensal = falta;
+        return { progresso, caixaPrincipal: caixa, metaVendas, objetivo, falta, pct, metaMensal, mesesRestantes: 1, diasAteDia30 };
     }
 
     calcularPatrimonioTotal() {
@@ -3707,10 +3843,17 @@ class DataManager {
 
     zerarComissaoIlannaManual() {
         const valorAnterior = this.data.comissaoIlannaMensal || 0;
+        const cicloManual = 'manual_' + this.hojeLocal();
         this.data.comissaoIlannaMensal = 0;
+        this.data.dataInicioCicloMeta = this.hojeLocal();
+        if (this.data.historico && Array.isArray(this.data.historico.vendas)) {
+            this.data.historico.vendas.forEach(v => {
+                if (!v._cicloMetaFechado) v._cicloMetaFechado = cicloManual;
+            });
+        }
         this.saveData();
         if (this.supabase) this.salvarSupabase();
-        console.log('[StrategyOS] Comissão da Ilanna zerada MANUALMENTE pelo usuário.');
+        console.log('[StrategyOS] Meta / Comissão zerada MANUALMENTE pelo usuário.');
         return valorAnterior;
     }
 
@@ -4130,10 +4273,14 @@ class DataManager {
         }
         let totalComissao = 0;
 
+        const dataInicioCiclo = this.data.dataInicioCicloMeta || '';
         if (this.data.historico && Array.isArray(this.data.historico.vendas)) {
             this.data.historico.vendas.forEach(v => {
+                if (v._cicloMetaFechado) return;
+                const dataYMD = (v.data || '').substring(0, 10);
+                if (dataInicioCiclo && dataYMD < dataInicioCiclo) return;
                 const dt = (v.data || '').substring(0, 7);
-                if (dt === mesAnoPrefix || dt === '2026-08') {
+                if (dt === mesAnoPrefix || (dataInicioCiclo && dataYMD >= dataInicioCiclo)) {
                     const prod = (v.produto || '').toLowerCase();
                     const tipo = (v.tipo || '').toLowerCase();
                     const isFogos = tipo === 'fogos' || prod.includes('fogo') || prod.includes('19x4') || prod.includes('12x1') || prod.includes('foguete');

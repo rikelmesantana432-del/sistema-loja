@@ -243,6 +243,7 @@ UI.zerarCaixa = function () {
         <div style="padding:12px">
             <p style="font-size:18px;color:var(--accent-red);margin-bottom:12px">⚠️ Isso vai colocar o saldo do caixa selecionado em R$ 0,00!</p>
             <select class="form-input" id="zerar-caixa" style="font-size:16px;padding:10px">
+                <option value="cicloMensalCompleto">🔄 Ciclo Mensal Completo: Caixa Principal + Gaveta + Meta R$ 7.000</option>
                 <option value="caixaSecundario">💵 Secundário / Gaveta Física (${UI.R(f.caixaSecundario || 0)})</option>
                 <option value="caixaPrincipal">🏦 Principal / Conta (${UI.R(f.caixaPrincipal || 0)})</option>
                 <option value="caixaTerciario">👨‍🦳 Terciário / Pai (${UI.R(f.caixaTerciario || 0)})</option>
@@ -256,6 +257,13 @@ UI.zerarCaixa = function () {
 
 UI._confirmarZerar = function () {
     const caixa = document.getElementById('zerar-caixa').value;
+    if (caixa === 'cicloMensalCompleto') {
+        const res = dataManager.executarZeramentoCicloMensal('manual_' + dataManager.hojeLocal(), dataManager.hojeLocal(), 'Zeramento Manual de Ciclo (Caixa Principal + Meta)');
+        UI.closeModal();
+        UI.toast('🔄 Caixa Principal, Gaveta e Meta (R$ 7.000) zerados para novo ciclo!', 'success');
+        UI.render();
+        return;
+    }
     const valorAnterior = dataManager.data.financeiro[caixa] || 0;
     dataManager.data.financeiro[caixa] = 0;
     if (!dataManager.data.movimentacoesCaixa) dataManager.data.movimentacoesCaixa = [];
