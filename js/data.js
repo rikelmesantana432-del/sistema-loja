@@ -4,6 +4,9 @@
 // Melhorias Finais + Modo Vendedor
 // ====================================
 
+// Dia do mês em que o ciclo (Caixa Principal + Gaveta + Meta) é zerado
+const DIA_ZERAMENTO_CICLO = 6;
+
 class DataManager {
     constructor() {
         this.storageKey = 'strategyos_v3';
@@ -91,7 +94,18 @@ class DataManager {
         }
     }
 
-    executarZeramentoCicloMensal(cicloId, dataRefYMD = null, motivo = 'Zeramento Automático Mensal (Dia 30 / Início de Mês)') {
+    // Ciclo mensal: do dia 6 de um mês até o dia 5 do mês seguinte (ex: '2026-10-dia06')
+    _chaveCicloMensal(ymd) {
+        const dia = parseInt(ymd.substring(8, 10), 10);
+        let [ano, mes] = ymd.substring(0, 7).split('-').map(Number);
+        if (dia < DIA_ZERAMENTO_CICLO) {
+            mes -= 1;
+            if (mes === 0) { mes = 12; ano -= 1; }
+        }
+        return `${ano}-${String(mes).padStart(2, '0')}-dia${String(DIA_ZERAMENTO_CICLO).padStart(2, '0')}`;
+    }
+
+    executarZeramentoCicloMensal(cicloId, dataRefYMD = null, motivo = 'Zeramento Automático do Ciclo Mensal (Dia 6)') {
         const hojeYMD = dataRefYMD || this.hojeLocal();
         const saldoPrincipalAnterior = this.data.financeiro?.caixaPrincipal || 0;
         const saldoGavetaAnterior = this.data.financeiro?.caixaSecundario || 0;
@@ -124,12 +138,12 @@ class DataManager {
         this.data.logComissaoMensal = [];
         this.data.dataInicioCicloMeta = hojeYMD;
         this.data.timestampInicioCicloMeta = new Date().toISOString();
-        this.data.ultimoCicloZeradoDia30 = cicloId;
+        this.data.ultimoZeramentoId = cicloId;
 
         if (!this.data.meta) this.data.meta = {};
         this.data.meta.nome = '🎯 Meta Mensal da Loja';
         this.data.meta.objetivo = 7000;
-        this.data.meta.diaZeramento = 30;
+        this.data.meta.diaZeramento = DIA_ZERAMENTO_CICLO;
         this.data.meta.progressoAtual = 0;
         this.data.meta.ultimoZeramento = hojeYMD;
 
@@ -170,41 +184,30 @@ class DataManager {
             const anoMes = hojeYMD.substring(0, 7); // ex: '2026-10'
             const dia = parseInt(hojeYMD.substring(8, 10), 10);
 
-            // Garante alvo da meta em R$ 7.000,00 e regra do dia 30
+            // Garante alvo da meta em R$ 7.000,00 e regra do dia 6
             if (!this.data.meta) this.data.meta = {};
             this.data.meta.objetivo = 7000;
-            this.data.meta.diaZeramento = 30;
+            this.data.meta.diaZeramento = DIA_ZERAMENTO_CICLO;
 
-            // 1. REGRA DO DIA 30: Todo dia 30 (ou >= 30), zera automaticamente Caixa Principal, Gaveta e Meta
-            if (dia >= 30) {
-                const cicloDia30 = `${anoMes}-dia30`;
-                if (this.data.ultimoCicloZeradoDia30 !== cicloDia30) {
-                    this.executarZeramentoCicloMensal(
-                        cicloDia30,
-                        hojeYMD,
-                        `FECHAMENTO AUTOMÁTICO DIA 30 (${hojeYMD})`
-                    );
-                    this.data.ultimoMesFechado = anoMes;
-                    this.saveData();
+            // REGRA DO DIA 6: o ciclo vai do dia 6 até o dia 5 do mês seguinte.
+            // Ao entrar em um novo ciclo, zera Caixa Principal, Gaveta e Meta (histórico preservado).
+            // O resumo do ciclo é enviado ao Telegram pelo servidor (Cloudflare Worker), sem duplicar.
+            const cicloAtual = this._chaveCicloMensal(hojeYMD);
+            if (!this.data.ultimoCicloZerado) {
+                const mudouMes = this.data.ultimoMesFechado && this.data.ultimoMesFechado !== anoMes;
+                if (mudouMes && dia >= DIA_ZERAMENTO_CICLO) {
+                    this.executarZeramentoCicloMensal(cicloAtual, hojeYMD, `FECHAMENTO AUTOMÁTICO DO CICLO — DIA ${DIA_ZERAMENTO_CICLO}`);
                 }
+                // Migração: marca o ciclo corrente sem zerar no meio do mês
+                this.data.ultimoCicloZerado = cicloAtual;
+                this.saveData();
+            } else if (this.data.ultimoCicloZerado !== cicloAtual) {
+                this.executarZeramentoCicloMensal(cicloAtual, hojeYMD, `FECHAMENTO AUTOMÁTICO DO CICLO — DIA ${DIA_ZERAMENTO_CICLO}`);
+                this.data.ultimoCicloZerado = cicloAtual;
+                this.saveData();
             }
 
-            // 2. REGRA DE VIRADA DE MÊS (Dia 01 / Início de novo mês):
-            if (!this.data.ultimoMesFechado) {
-                this.data.ultimoMesFechado = anoMes;
-                this.saveData();
-            } else if (this.data.ultimoMesFechado !== anoMes) {
-                const mesAnterior = this.data.ultimoMesFechado;
-                const cicloDia30MesAnterior = `${mesAnterior}-dia30`;
-                const jaZerouNoDia30Anterior = (this.data.ultimoCicloZeradoDia30 === cicloDia30MesAnterior);
-
-                if (!jaZerouNoDia30Anterior) {
-                    this.executarZeramentoCicloMensal(
-                        `${anoMes}-inicio`,
-                        hojeYMD,
-                        `FECHAMENTO AUTOMÁTICO DE INÍCIO DE MÊS (${mesAnterior} -> ${anoMes})`
-                    );
-                }
+            if (this.data.ultimoMesFechado !== anoMes) {
                 this.data.ultimoMesFechado = anoMes;
                 this.saveData();
             }
@@ -230,7 +233,7 @@ class DataManager {
                 }
             }
         } catch (e) {
-            console.error('Erro na verificação de virada de mês / dia 30:', e);
+            console.error('Erro na verificação do ciclo mensal (dia 6):', e);
         }
     }
 
@@ -455,13 +458,13 @@ class DataManager {
                 reservaEmergencia: 0
             },
 
-            // === META MENSAL (ALVO R$ 7.000,00 — ZERA DIA 30 / INÍCIO DO MÊS) ===
+            // === META MENSAL (ALVO R$ 7.000,00 — ZERA TODO DIA 6) ===
             meta: {
                 nome: '🎯 Meta Mensal da Loja',
                 objetivo: 7000,
-                diaZeramento: 30,
+                diaZeramento: DIA_ZERAMENTO_CICLO,
                 prazo: '2026-12-31',
-                descricao: 'Meta mensal de R$ 7.000,00 — Zera automaticamente todo dia 30 / início de mês',
+                descricao: 'Meta mensal de R$ 7.000,00 — Zera automaticamente todo dia 6',
                 dataInicio: '2026-10-01'
             },
 
@@ -1013,10 +1016,10 @@ class DataManager {
                 }
                 // ==============================================================================
                 
-                // === META MENSAL FIXADA EM R$ 7.000,00 COM ZERAMENTO AUTOMÁTICO DIA 30 ===
+                // === META MENSAL FIXADA EM R$ 7.000,00 COM ZERAMENTO AUTOMÁTICO DIA 6 ===
                 if (!merged.meta) merged.meta = {};
                 merged.meta.objetivo = 7000;
-                merged.meta.diaZeramento = 30;
+                merged.meta.diaZeramento = DIA_ZERAMENTO_CICLO;
                 merged.meta.nome = '🎯 Meta Mensal da Loja';
 
                 // === CÁLCULO DINÂMICO E AUDITORIA DA META / COMISSÃO (CICLO CORRENTE) ===
@@ -1864,15 +1867,20 @@ class DataManager {
         const objetivo = 7000;
         if (this.data.meta) {
             this.data.meta.objetivo = 7000;
-            this.data.meta.diaZeramento = 30;
+            this.data.meta.diaZeramento = DIA_ZERAMENTO_CICLO;
         }
         const falta = Math.max(0, objetivo - progresso);
         const pct = Math.min(100, (progresso / objetivo) * 100);
         const hoje = new Date();
         const diaAtual = hoje.getDate();
-        const diasAteDia30 = diaAtual < 30 ? (30 - diaAtual) : 30;
+        const diasAteZeramento = this._diasAteProximoZeramento(hoje);
         const metaMensal = falta;
-        return { progresso, caixaPrincipal: caixa, metaVendas, objetivo, falta, pct, metaMensal, mesesRestantes: 1, diasAteDia30 };
+        return { progresso, caixaPrincipal: caixa, metaVendas, objetivo, falta, pct, metaMensal, mesesRestantes: 1, diasAteZeramento };
+    }
+
+    _diasAteProximoZeramento(hoje = new Date()) {
+        const alvo = new Date(hoje.getFullYear(), hoje.getMonth() + (hoje.getDate() >= DIA_ZERAMENTO_CICLO ? 1 : 0), DIA_ZERAMENTO_CICLO);
+        return Math.max(0, Math.ceil((alvo - hoje) / 86400000));
     }
 
     calcularPatrimonioTotal() {

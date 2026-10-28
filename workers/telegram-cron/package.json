@@ -1,0 +1,8 @@
+{
+  "name": "strategyos-telegram-cron",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test/relatorios.test.mjs"
+  }
+}

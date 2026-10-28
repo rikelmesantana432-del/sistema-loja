@@ -338,7 +338,7 @@ UI._obterWidgetMetaIlanna = function () {
         <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px;">
             <span style="font-size:24px; font-weight:850; color:#FFFFFF; font-family:'Space Grotesk',sans-serif;">${UI.R(totalVendasMes)} <span style="font-size:12px;color:var(--text-muted);font-weight:400;font-family:inherit;">acumulado</span></span>
             <div style="text-align:right;">
-                <div style="font-size:12px; color:var(--text-muted);">Alvo: <strong>${UI.R(meta)}</strong> <span style="font-size:10px;color:#a855f7;">(Zera todo dia 30)</span></div>
+                <div style="font-size:12px; color:var(--text-muted);">Alvo: <strong>${UI.R(meta)}</strong> <span style="font-size:10px;color:#a855f7;">(Zera todo dia 6)</span></div>
                 <div style="font-size:10px; color:#00c8ff; font-weight:600; margin-top:3px; background:rgba(0,200,255,0.08); padding:2px 8px; border-radius:6px; display:inline-block;">📱 Cel: 3% | 🔧 Consertos & 🛒 Acessórios: lucro total</div>
             </div>
         </div>

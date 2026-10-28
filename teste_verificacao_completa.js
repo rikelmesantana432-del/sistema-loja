@@ -1,4 +1,4 @@
-/**
+﻿/**
  * TESTE DE VERIFICAÇÃO COMPLETA - STRATEGYOS 3.0
  * Executa simulação com sandbox isolado para validar regras de negócio,
  * caixas, comissão, precificação de conserto, fiado e fechamentos.
@@ -153,12 +153,17 @@ assert(fechSemanal.vendasSemana === 150, `Fechamento semanal total vendas: R$ ${
 assert(fechSemanal.custoSemana === 90, `Custo de reposição semanal: R$ ${fechSemanal.custoSemana}`);
 assert(fechSemanal.topVolume && fechSemanal.topVolume.nome === 'Película 3D', `Top volume identificado corretamente: ${fechSemanal.topVolume?.nome}`);
 
-// TESTE 8: Virada de Mês e Reset do Caixa Físico
-dm.data.ultimoMesFechado = '2026-09';
+// TESTE 8: Novo ciclo (dia 6) zera o Caixa Físico
+dm.data.ultimoCicloZerado = '2026-01-dia06';
 dm.data.financeiro.caixaSecundario = 500;
 dm.verificarViradaDeMes();
-assert(dm.data.financeiro.caixaSecundario === 0, `Caixa físico zerado após virada de mês (esperado: 0, obtido: ${dm.data.financeiro.caixaSecundario})`);
+assert(dm.data.financeiro.caixaSecundario === 0, `Caixa físico zerado ao entrar em novo ciclo do dia 6 (esperado: 0, obtido: ${dm.data.financeiro.caixaSecundario})`);
 assert(dm.data.historicoFechamentoMensal && dm.data.historicoFechamentoMensal.length > 0, 'Histórico mensal arquivado no fechamento');
+assert(dm._chaveCicloMensal('2026-11-05') === '2026-10-dia06' && dm._chaveCicloMensal('2026-11-06') === '2026-11-dia06' && dm._chaveCicloMensal('2027-01-03') === '2026-12-dia06', `Ciclo mensal vai do dia 6 ao dia 5 do mês seguinte`);
+const saldoAntesRepeticao = 321;
+dm.data.financeiro.caixaSecundario = saldoAntesRepeticao;
+dm.verificarViradaDeMes();
+assert(dm.data.financeiro.caixaSecundario === saldoAntesRepeticao, `Zeramento do ciclo NÃO se repete dentro do mesmo ciclo (sem zeramentos fantasmas)`);
 
 // TESTE 9: Roteamento estrito PIX/Cartão (caixaPrincipal) vs Dinheiro (caixaSecundario)
 dm.data.financeiro.caixaSecundario = 200;
@@ -288,7 +293,7 @@ assert(totalModelosCatalogo >= 130, `Catálogo expandido de consertos com ${tota
 assert(typeof dm.salvarNuvemCloudflare === 'function' && typeof dm._salvarIndexedDB === 'function', `Redundância Quádrupla ativa (localStorage + IndexedDB + Cloudflare KV + Telegram)`);
 assert(Array.isArray(dm.data.filaTelegramPendente) && dm.data.filaTelegramPendente.length === 0, `Fila fantasma do Telegram limpa e trava anti-spam ativa`);
 
-// TESTE 17: Meta R$ 7.000, Zeramento Automático Dia 30 (Caixa Principal + Meta), Botão "Já fizemos pedido" e Zerar Bloco de Notas
+// TESTE 17: Meta R$ 7.000, Zeramento Automático Dia 6 (Caixa Principal + Meta), Botão "Já fizemos pedido" e Zerar Bloco de Notas
 const progMeta = dm.calcularProgressoMeta();
 assert(progMeta.objetivo === 7000 && dm.data.meta.objetivo === 7000, `Alvo da Meta atualizado para R$ 7.000,00 (obtido: R$ ${progMeta.objetivo})`);
 
@@ -296,10 +301,10 @@ dm.data.financeiro.caixaPrincipal = 4500;
 dm.data.financeiro.caixaSecundario = 850;
 dm.data.comissaoIlannaMensal = 3200;
 dm.data.historico.vendas.push({ id: 88801, data: '2026-08-15', produto: 'Capinha Antiga', valorVenda: 50, custo: 10, lucro: 40 });
-dm.executarZeramentoCicloMensal('2026-10-dia30', '2026-10-30', 'Teste Zeramento Dia 30');
-assert(dm.data.financeiro.caixaPrincipal === 0, `Caixa Principal zerado automaticamente no ciclo Dia 30 (obtido: ${dm.data.financeiro.caixaPrincipal})`);
-assert(dm.data.financeiro.caixaSecundario === 0, `Caixa Secundário zerado automaticamente no ciclo Dia 30 (obtido: ${dm.data.financeiro.caixaSecundario})`);
-assert(dm.data.comissaoIlannaMensal === 0 && dm.calcularComissaoIlannaReal() === 0, `Meta acumulada zerada no ciclo Dia 30 sem puxar meses antigos (obtido: ${dm.calcularComissaoIlannaReal()})`);
+dm.executarZeramentoCicloMensal('2026-11-dia06', '2026-11-06', 'Teste Zeramento Dia 6');
+assert(dm.data.financeiro.caixaPrincipal === 0, `Caixa Principal zerado automaticamente no ciclo do Dia 6 (obtido: ${dm.data.financeiro.caixaPrincipal})`);
+assert(dm.data.financeiro.caixaSecundario === 0, `Caixa Secundário zerado automaticamente no ciclo do Dia 6 (obtido: ${dm.data.financeiro.caixaSecundario})`);
+assert(dm.data.comissaoIlannaMensal === 0 && dm.calcularComissaoIlannaReal() === 0, `Meta acumulada zerada no ciclo do Dia 6 sem puxar meses antigos (obtido: ${dm.calcularComissaoIlannaReal()})`);
 
 dm.adicionarProdutoProcurado('Cabo Original iPhone 15', 'Cliente pediu 2x', 'Atendente');
 assert(dm.getProdutosProcurados().length > 0, `Produto em falta adicionado antes do pedido`);

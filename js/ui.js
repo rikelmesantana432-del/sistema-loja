@@ -289,7 +289,7 @@ const UI = {
                 <div style="display:flex; justify-content:center; gap:24px; align-items:center; flex-wrap:wrap;">
                     <div style="text-align:center;">
                         <div class="hero-value" style="font-size:32px; color:#10b981;">${this.R(f.caixaPrincipal || 0)}</div>
-                        <div class="hero-label" style="font-size:12px; color:#10b981;">Caixa Principal (Zera dia 30)</div>
+                        <div class="hero-label" style="font-size:12px; color:#10b981;">Caixa Principal (Zera dia 6)</div>
                     </div>
                     <div style="width:1px; height:45px; background:rgba(255,255,255,0.15)"></div>
                     <div style="text-align:center;">
@@ -303,7 +303,7 @@ const UI = {
                     </div>
                 </div>
                 <div style="text-align:center;margin-top:10px;font-size:12px;color:var(--text-muted);">
-                    🎯 Alvo da Meta: <strong style="color:#FFD700;">R$ 7.000,00</strong> • 🔄 Zeramento Automático: <strong>Todo dia 30 / Início de Mês</strong>
+                    🎯 Alvo da Meta: <strong style="color:#FFD700;">R$ 7.000,00</strong> • 🔄 Zeramento Automático: <strong>Todo dia 6 (resumo no Telegram)</strong>
                 </div>
             </div>`;
         }
@@ -369,7 +369,7 @@ const UI = {
         html += `<h3 class="dash-section-title" style="margin-top:20px">📈 VENDAS — ÚLTIMOS 7 DIAS</h3>`;
         html += `<div id="grafico-vendas" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,215,0,0.08);border-radius:12px;padding:8px;min-height:220px"></div>`;
 
-        // === CARD DE META MENSAL (ALVO R$ 7.000,00 - ZERA TODO DIA 30) ===
+        // === CARD DE META MENSAL (ALVO R$ 7.000,00 - ZERA TODO DIA 6) ===
         if (typeof UI._obterWidgetMetaIlanna === 'function') {
             html += UI._obterWidgetMetaIlanna();
         }

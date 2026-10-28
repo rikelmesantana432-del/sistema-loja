@@ -1,0 +1,4 @@
+workers
+chrome-profile
+.vercel
+.wrangler
