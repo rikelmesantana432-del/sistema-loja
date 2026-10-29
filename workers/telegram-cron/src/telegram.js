@@ -27,7 +27,7 @@ export async function enviarMensagem(token, chatId, texto) {
         resp = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: chatId, text: texto.replace(/[*_`]/g, '') })
+            body: JSON.stringify({ chat_id: chatId, text: texto.replace(/[*_`\[\]]/g, '') })
         });
         data = await resp.json();
     }

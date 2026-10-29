@@ -1538,11 +1538,14 @@ UI._confirmarBaterCaixa = function (saldoEsperado) {
         (valorMaquina > 0 ? `💳 *Comprovantes Cartão/PIX:* ${UI.R(valorMaquina)}\n` : '') +
         (obs ? `📝 *Observações:* ${obs}\n` : '');
 
+    // Sincronizar conferência imediatamente com a nuvem Cloudflare KV
+    if (typeof dataManager.salvarNuvemCloudflare === 'function') {
+        dataManager.salvarNuvemCloudflare();
+    }
+
+    // Enviar conferência da gaveta ao Telegram
     if (dataManager.enviarTelegram) {
         dataManager.enviarTelegram(msgTelegramBater);
-    }
-    if (dataManager.enviarFechamentoDiarioTelegram) {
-        dataManager.enviarFechamentoDiarioTelegram();
     }
     
     UI.closeModal();

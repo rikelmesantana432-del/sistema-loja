@@ -2114,7 +2114,10 @@ class DataManager {
             this.limparEstoqueVendido();
             this.saveData();
 
-            // Notificação enviada via _registrarSincronizacaoFinanceira
+            // Sincronizar imediatamente com a nuvem Cloudflare (sem esperar debounce)
+            if (typeof this.salvarNuvemCloudflare === 'function') {
+                this.salvarNuvemCloudflare();
+            }
 
             return { sucesso: true };
         } catch (e) {
@@ -3075,8 +3078,9 @@ class DataManager {
                 const isDinheiro = (caixaDestino === 'caixaSecundario') || ((tipo || '').includes('dinheiro')) || (!caixaDestino && (tipo || '').includes('avista'));
                 if (isDinheiro) {
                     this.data.financeiro.caixaSecundario += valorTotal;
+                } else {
+                    this.data.financeiro.caixaPrincipal += valorTotal;
                 }
-                this.data.financeiro.caixaPrincipal += valorTotal;
             }
         }
 
@@ -3682,7 +3686,6 @@ class DataManager {
         }
         this.data.preferencias.modoTreino = false;
     }
-    isModoTreino() { return this.data.preferencias.modoTreino === true; }
 
     // ===== REFERÊNCIA INTELIGENTE DE PREÇOS =====
     buscarReferenciaInteligente(modelo) {
@@ -4173,21 +4176,47 @@ class DataManager {
             let totalConsertos = 0;
             let listaVendas = [];
             
-            vendasHoje.forEach(v => {
+            vendasHoje.forEach((v, idx) => {
                 const val = parseFloat(v.valorVenda || v.liquido || v.valor || 0);
                 const prod = v.produto || 'Item';
-                const lucro = parseFloat(v.lucro || 0);
-                const forma = v.formaPagamento || v.tipo || '';
-                
-                if (v.caixaDestino === 'caixaFogos' || (v.tipo && v.tipo.includes('fogos'))) {
+                const custo = parseFloat(v.custo || v.custoPeca || 0) || 0;
+                let lucro = parseFloat(v.lucro !== undefined ? v.lucro : (val - custo));
+                if (isNaN(lucro) || lucro < 0) lucro = Math.max(0, val - custo);
+
+                const prodLow = prod.toLowerCase();
+                const tipoLow = String(v.tipo || '').toLowerCase();
+                const caixaLow = String(v.caixaDestino || (v.pagamentoDivisao && v.pagamentoDivisao[0] && v.pagamentoDivisao[0].caixa) || '').toLowerCase();
+
+                let cat = 'loja';
+                if (caixaLow === 'caixafogos' || tipoLow.includes('fogos') || /fogos?|bomba|12x1|19x4|foguete|traque|rojao/.test(prodLow)) {
+                    cat = 'fogos';
                     totalVendasFogos += val;
-                } else if (v.tipo && v.tipo.includes('conserto')) {
+                } else if (tipoLow.includes('conserto') || /conserto|manut|bateria|tela|conector|reparo|troca de|daginitico|diagnostico|solda|desoxida/.test(prodLow)) {
+                    cat = 'conserto';
                     totalConsertos += val;
                 } else {
                     totalVendasLoja += val;
                 }
-                
-                listaVendas.push(`   • ${prod} — ${R(val)} (Lucro: ${R(lucro)}) [${forma}]`);
+
+                let formaLabel = 'Balcão';
+                if (Array.isArray(v.pagamentoDivisao) && v.pagamentoDivisao.length > 0) {
+                    formaLabel = v.pagamentoDivisao.map(p => {
+                        const f = String(p.forma || '').toLowerCase();
+                        if (f === 'dinheiro') return '💵 Dinheiro (Gaveta)';
+                        if (f === 'pix') return '📱 PIX';
+                        if (f.includes('cartao')) return '💳 Cartão';
+                        return p.forma;
+                    }).join(' + ');
+                } else {
+                    const f = String(v.formaPagamento || v.tipo || '').toLowerCase();
+                    if (f === 'dinheiro' || f === 'avista') formaLabel = '💵 Dinheiro (Gaveta)';
+                    else if (f === 'pix') formaLabel = '📱 PIX';
+                    else if (f.includes('cartao')) formaLabel = '💳 Cartão';
+                }
+
+                const cliLabel = v.cliente && v.cliente !== 'Não Identificado' ? ` | 👤 ${v.cliente}` : '';
+                const emojiCat = cat === 'conserto' ? '🔧' : cat === 'fogos' ? '🎆' : '🛒';
+                listaVendas.push(`   ${idx + 1}. ${emojiCat} ${prod} — *${R(val)}* [Lucro: ${R(lucro)}]\n      └─ ${formaLabel}${cliLabel}`);
             });
             
             // ===== MOVIMENTAÇÕES DO DIA (despesas, sangrias, etc.) =====

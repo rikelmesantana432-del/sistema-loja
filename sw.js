@@ -26,7 +26,6 @@ const ASSETS_TO_CACHE = [
   './js/ui-ia-sugestoes.js',
   './js/ui-fidelidade.js',
   './js/ui-estoque.js',
-  './js/ui-estoque-render.js',
   './js/peliculaiq.js',
   './js/ui-peliculaiq.js',
   './js/ui-melhorias.js',

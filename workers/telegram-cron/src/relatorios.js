@@ -1,30 +1,101 @@
-// Montagem dos relatórios enviados pelo servidor (fechamento diário e ciclo mensal do dia 6)
+// ============================================================================
+// STRATEGYOS — RELATÓRIOS DO TELEGRAM NO SERVIDOR (Cloudflare Worker)
+// Fechamento Diário Pontual (18:00 Bahia) & Resumo Mensal do Ciclo (Dia 6)
+// ============================================================================
 import { R, dataYMDDeValor, formatarBR, chaveCicloMensal, mesAnterior, META_OBJETIVO, DIA_ZERAMENTO } from './datas.js';
 
-function classificarVenda(v) {
+export function sanitizarMD(txt) {
+    if (txt === null || txt === undefined) return '';
+    return String(txt).replace(/([_*`\[\]])/g, '');
+}
+
+export function classificarVenda(v) {
     const tipo = String(v.tipo || '').toLowerCase();
-    if (v.caixaDestino === 'caixaFogos' || tipo.includes('fogos')) return 'fogos';
-    if (tipo.includes('conserto')) return 'conserto';
+    const prod = String(v.produto || '').toLowerCase();
+    const caixa = String(v.caixaDestino || (v.pagamentoDivisao && v.pagamentoDivisao[0] && v.pagamentoDivisao[0].caixa) || '').toLowerCase();
+
+    // 1. Fogos de Artifício
+    if (caixa === 'caixafogos' || tipo.includes('fogos') || /fogos?|bomba|12x1|19x4|foguete|traque|rojao/.test(prod)) {
+        return 'fogos';
+    }
+    // 2. Consertos & Serviços Técnicos
+    if (tipo.includes('conserto') || /conserto|manut|bateria|tela|conector|reparo|troca de|daginitico|diagnostico|solda|desoxida/.test(prod)) {
+        return 'conserto';
+    }
+    // 3. Celulares / Aparelhos Novos ou Seminovos
+    if (tipo === 'celular' || ((/iphone|samsung|xiaomi|motorola|redmi|poco/.test(prod)) && !/capa|capinha|pelicula|cabo|fone|carregador/.test(prod))) {
+        return 'celular';
+    }
+    // 4. Balcão Loja / Acessórios
     return 'loja';
 }
 
-function valorVenda(v) {
+export function identificarPagamento(v) {
+    if (Array.isArray(v.pagamentoDivisao) && v.pagamentoDivisao.length > 0) {
+        const partes = v.pagamentoDivisao.map(p => {
+            const f = String(p.forma || '').toLowerCase();
+            if (f === 'dinheiro') return '💵 Dinheiro (Gaveta)';
+            if (f === 'pix') return '📱 PIX';
+            if (f.includes('cartao') || f.includes('credito') || f.includes('debito')) return '💳 Cartão';
+            return sanitizarMD(p.forma);
+        });
+        return partes.join(' + ');
+    }
+    const f = String(v.formaPagamento || v.tipo || '').toLowerCase();
+    if (f === 'dinheiro' || f === 'avista') return '💵 Dinheiro (Gaveta)';
+    if (f === 'pix') return '📱 PIX';
+    if (f.includes('cartao') || f.includes('parcelado')) return '💳 Cartão';
+    return sanitizarMD(v.formaPagamento || v.tipo || 'Balcão');
+}
+
+export function valorVenda(v) {
     const val = parseFloat(v.valorVenda || v.liquido || v.valor || 0);
     return Number.isFinite(val) && val < 50000 ? val : 0;
 }
 
 export function montarFechamentoDiario(state, ymd) {
     const vendas = ((state.historico && state.historico.vendas) || []).filter(v => dataYMDDeValor(v.data) === ymd);
-    const totais = { loja: 0, fogos: 0, conserto: 0 };
+    const categorias = { loja: 0, fogos: 0, conserto: 0, celular: 0 };
+    const formas = { dinheiro: 0, pix: 0, cartao: 0 };
     let lucroTotal = 0;
-    const linhas = vendas.map(v => {
+    let custoTotal = 0;
+
+    const linhas = vendas.map((v, idx) => {
         const val = valorVenda(v);
-        const lucro = parseFloat(v.lucro || 0) || 0;
-        totais[classificarVenda(v)] += val;
+        const custo = parseFloat(v.custo || v.custoPeca || 0) || 0;
+        let lucro = parseFloat(v.lucro !== undefined ? v.lucro : (val - custo));
+        if (isNaN(lucro) || lucro < 0) lucro = Math.max(0, val - custo);
+
+        custoTotal += custo;
         lucroTotal += lucro;
-        return `   • ${v.produto || 'Item'} — ${R(val)} (Lucro: ${R(lucro)}) [${v.formaPagamento || v.tipo || ''}]`;
+
+        const cat = classificarVenda(v);
+        categorias[cat] = (categorias[cat] || 0) + val;
+
+        // Totalização de meios de pagamento
+        if (Array.isArray(v.pagamentoDivisao) && v.pagamentoDivisao.length > 0) {
+            v.pagamentoDivisao.forEach(p => {
+                const forma = String(p.forma || '').toLowerCase();
+                const vPart = parseFloat(p.valor || 0) || 0;
+                if (forma === 'dinheiro') formas.dinheiro += vPart;
+                else if (forma === 'pix') formas.pix += vPart;
+                else formas.cartao += vPart;
+            });
+        } else {
+            const f = String(v.formaPagamento || v.tipo || '').toLowerCase();
+            if (f === 'dinheiro' || f === 'avista') formas.dinheiro += val;
+            else if (f === 'pix') formas.pix += val;
+            else formas.cartao += val;
+        }
+
+        const formaLabel = identificarPagamento(v);
+        const cliLabel = v.cliente && v.cliente !== 'Não Identificado' ? ` | 👤 ${sanitizarMD(v.cliente)}` : '';
+        const emojiCat = cat === 'conserto' ? '🔧' : cat === 'fogos' ? '🎆' : cat === 'celular' ? '📱' : '🛒';
+
+        return `   ${idx + 1}. ${emojiCat} ${sanitizarMD(v.produto || 'Item')} — *${R(val)}* [Lucro: ${R(lucro)}]\n      └─ ${formaLabel}${cliLabel}`;
     });
 
+    // Despesas do dia
     const movsDia = (state.movimentacoesCaixa || []).filter(m => dataYMDDeValor(m.data) === ymd);
     let despesas = 0;
     const linhasDespesas = [];
@@ -32,37 +103,54 @@ export function montarFechamentoDiario(state, ymd) {
         if (m.tipo !== 'despesa') return;
         const val = Math.abs(parseFloat(m.valor || 0) || 0);
         despesas += val;
-        linhasDespesas.push(`   • ${m.descricao || m.motivo || 'Despesa'} — ${R(val)}`);
+        linhasDespesas.push(`   • ${sanitizarMD(m.descricao || m.motivo || 'Despesa')} — *-${R(val)}*`);
     });
 
     const f = state.financeiro || {};
-    const totalDia = totais.loja + totais.fogos + totais.conserto;
+    const totalBruto = categorias.loja + categorias.fogos + categorias.conserto + (categorias.celular || 0);
+    const lucroLiquidoReal = Math.max(0, lucroTotal - despesas);
+    const parteLoja40 = Math.round(lucroLiquidoReal * 0.40 * 100) / 100;
+    const partePai60 = Math.round(lucroLiquidoReal * 0.60 * 100) / 100;
+
     const celulares = (state.estoqueCelulares || []).filter(c => c.status === 'disponivel').length;
     const acessorios = (state.estoqueAcessorios || []).filter(a => a.status !== 'vendido').length;
-    const listaVendas = linhas.length ? linhas.slice(0, 40).join('\n') + (linhas.length > 40 ? `\n   … e mais ${linhas.length - 40} itens` : '') : '   _Nenhuma venda registrada hoje._';
+    const listaVendas = linhas.length ? linhas.slice(0, 30).join('\n') + (linhas.length > 30 ? `\n   … e mais ${linhas.length - 30} itens vendidos` : '') : '   _Nenhuma venda registrada hoje._';
 
-    const texto = `📊 *FECHAMENTO DE CAIXA AUTOMÁTICO* 📊\n` +
-        `📅 *Data:* ${formatarBR(ymd)}\n` +
+    const texto = `📊 *FECHAMENTO DE CAIXA DIÁRIO — STRATEGYOS* 📊\n` +
+        `📅 *Data:* ${formatarBR(ymd)} (18:00 Bahia)\n` +
         `🏪 *Loja:* Cesinha Acessórios\n` +
-        `━━━━━━━━━━━━━━━━━━━━\n\n` +
-        `💰 *VENDAS DO DIA (${vendas.length} itens):*\n${listaVendas}\n\n` +
-        `📈 *RESUMO FINANCEIRO:*\n` +
-        `   🛒 Loja/Balcão: *${R(totais.loja)}*\n` +
-        `   🎆 Fogos: *${R(totais.fogos)}*\n` +
-        `   🔧 Consertos/OS: *${R(totais.conserto)}*\n` +
-        `   💵 *TOTAL DO DIA: ${R(totalDia)}*\n` +
-        `   📊 Lucro estimado: *${R(lucroTotal)}*\n\n` +
-        `💸 *DESPESAS:*\n${linhasDespesas.length ? linhasDespesas.join('\n') : '   _Nenhuma despesa registrada._'}\n` +
-        `   Total: *-${R(despesas)}*\n\n` +
-        `🏦 *SALDOS NOS CAIXAS:*\n` +
-        `   🏦 Caixa Principal: *${R(f.caixaPrincipal)}*\n` +
-        `   💚 Gaveta (Secundário): *${R(f.caixaSecundario)}*\n` +
-        `   🎆 Caixa de Fogos: *${R(f.caixaFogos)}*\n\n` +
-        `🎯 *META DO CICLO:* ${R(state.comissaoIlannaMensal)} de ${R(META_OBJETIVO)}\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+        `💵 *FATURAMENTO BRUTO: ${R(totalBruto)}* (${vendas.length} itens)\n` +
+        `📈 *LUCRO LÍQUIDO REAL DO DIA: ${R(lucroLiquidoReal)}*\n` +
+        `   ├─ 🏬 *40% Loja (Capital/Giro):* ${R(parteLoja40)}\n` +
+        `   └─ 👨 *60% Pai (Retirada Parceiro):* ${R(partePai60)}\n\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `💳 *DIVISÃO POR MEIO DE PAGAMENTO:*\n` +
+        `   💵 Dinheiro (Gaveta Física): *${R(formas.dinheiro)}*\n` +
+        `   📱 PIX (Caixa Principal / Conta): *${R(formas.pix)}*\n` +
+        `   💳 Cartão (Débito/Crédito): *${R(formas.cartao)}*\n\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `🏷️ *FATURAMENTO POR CATEGORIA:*\n` +
+        `   🔧 Consertos & Serviços: *${R(categorias.conserto)}*\n` +
+        `   🎆 Fogos de Artifício: *${R(categorias.fogos)}*\n` +
+        `   🛒 Acessórios Balcão: *${R(categorias.loja)}*\n` +
+        `   📱 Celulares: *${R(categorias.celular || 0)}*\n\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `📝 *DISCRIMINAÇÃO DETALHADA DAS VENDAS:*\n${listaVendas}\n\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `💸 *DESPESAS DO DIA:*\n${linhasDespesas.length ? linhasDespesas.join('\n') : '   _Nenhuma despesa registrada hoje._'}\n` +
+        `   *Total Despesas:* -${R(despesas)}\n\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `🏦 *SALDO DOS CAIXAS NO SISTEMA:*\n` +
+        `   💚 Gaveta Física (Caixa Secundário): *${R(f.caixaSecundario)}*\n` +
+        `   📊 Caixa Principal (PIX / Cartão): *${R(f.caixaPrincipal)}*\n` +
+        `   🎆 Caixa de Fogos: *${R(f.caixaFogos)}*\n` +
+        `   👨 Caixa Terciário (Pai): *${R(f.caixaTerciario || 0)}*\n\n` +
+        `🎯 *META DO CICLO (Até Dia 06):* ${R(state.comissaoIlannaMensal || 0)} de ${R(META_OBJETIVO)}\n` +
         `📦 *Estoque:* ${celulares} celulares | ${acessorios} acessórios\n\n` +
-        `🤖 _Enviado automaticamente pelo servidor StrategyOS (sem depender de celular ligado)_`;
+        `🤖 _Relatório pontual emitido pelo servidor StrategyOS v3.9_`;
 
-    return { texto, qtdVendas: vendas.length, totalDia };
+    return { texto, qtdVendas: vendas.length, totalDia: totalBruto, lucroReal: lucroLiquidoReal };
 }
 
 function inicioCicloAnterior(ymdHoje) {

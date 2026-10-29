@@ -20,7 +20,8 @@ async function lerEstado(env) {
 async function executarFechamento(env, { force = false, dry = false, apenasDono = false } = {}) {
     const ymd = hojeLocal();
     const chaveEnvio = `tg_fechamento_${ymd}`;
-    if (!force && await env.STRATEGYOS_DB.get(chaveEnvio)) return { ignorado: 'já enviado hoje', ymd };
+    const statusEnvio = await env.STRATEGYOS_DB.get(chaveEnvio);
+    if (!force && statusEnvio) return { ignorado: 'já enviado hoje', ymd, status: statusEnvio };
 
     const dados = await lerEstado(env);
     if (!dados) return { erro: 'estado não encontrado no KV' };
@@ -34,14 +35,27 @@ async function executarFechamento(env, { force = false, dry = false, apenasDono 
     if (!force && diaSemanaLocal() === 0 && rel.qtdVendas === 0) return { ignorado: 'domingo sem vendas' };
     if (dry) return { dry: true, ymd, texto: rel.texto };
 
+    // Trava preliminar atômica antes do disparo de rede para garantir ZERO duplicidades
+    if (!force) {
+        await env.STRATEGYOS_DB.put(chaveEnvio, `PROCESSANDO_${new Date().toISOString()}`, { expirationTtl: 3600 });
+    }
+
     const token = tokenBot(env, state);
     const resultados = await enviarParaTodos(token, destinatarios(env, state, apenasDono), rel.texto);
-    const dono = destinatarios(env, state, true)[0];
-    const doc = await enviarDocumento(token, dono, raw, `StrategyOS_Backup_Cesinha_${ymd}.json`, `💾 BACKUP AUTOMÁTICO STRATEGYOS — ${ymd}`);
+
+    let doc = { ok: false };
+    try {
+        const dono = destinatarios(env, state, true)[0];
+        doc = await enviarDocumento(token, dono, raw, `StrategyOS_Backup_Cesinha_${ymd}.json`, `💾 BACKUP AUTOMÁTICO STRATEGYOS — ${ymd}`);
+    } catch (eDoc) {
+        console.warn('Aviso no envio do documento de backup:', eDoc && eDoc.message);
+    }
 
     const algumOk = resultados.some(r => r.ok);
     if (algumOk && !force) {
-        await env.STRATEGYOS_DB.put(chaveEnvio, new Date().toISOString(), { expirationTtl: 40 * 24 * 3600 });
+        await env.STRATEGYOS_DB.put(chaveEnvio, `CONCLUIDO_${new Date().toISOString()}`, { expirationTtl: 40 * 24 * 3600 });
+    } else if (!algumOk && !force) {
+        await env.STRATEGYOS_DB.delete(chaveEnvio);
     }
     return { ymd, resultados, backup: Boolean(doc.ok) };
 }
@@ -69,11 +83,11 @@ async function executarResumoCiclo(env, { force = false, dry = false, apenasDono
 
 export default {
     async scheduled(event, env, ctx) {
-        // 11:00 UTC = 08:00 Bahia (resumo do ciclo do dia 6)
-        // 21:00 UTC = 18:00 Bahia (fechamento diário) | 23:00 UTC = nova tentativa caso falhe
+        // 11:00 UTC = 08:00 Bahia (resumo do ciclo mensal do dia 6)
+        // 21:00 UTC = 18:00 Bahia (fechamento diário pontual)
         if (event.cron === '0 11 * * *') {
             ctx.waitUntil(executarResumoCiclo(env));
-        } else {
+        } else if (event.cron === '0 21 * * *') {
             ctx.waitUntil(executarFechamento(env));
         }
     },
