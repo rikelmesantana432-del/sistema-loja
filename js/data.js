@@ -1194,6 +1194,7 @@ class DataManager {
                 this.sincronizarNuvemCloudflare();
             }, 45000);
         }
+        this.iniciarVerificacaoFechamento18h();
     }
 
     _salvarIndexedDB(jsonStr) {
@@ -1255,14 +1256,7 @@ class DataManager {
             const cloudSaveTime = cloudPayload._ultimoSaveLocal || (json.updated_at ? new Date(json.updated_at).getTime() : 0);
 
             if (cloudSaveTime > localSaveTime) {
-                const defCloud = this.getDefaultData();
-                const merged = this._merge(defCloud, cloudPayload);
-                merged.tabelaServicosModelo = { ...(cloudPayload.tabelaServicosModelo || {}), ...(defCloud.tabelaServicosModelo || {}) };
-                merged.ultimoFechamentoDiario = this.hojeLocal();
-                merged.ultimoFechamentoAutoTelegram = this.hojeLocal();
-                merged.ultimoBackupDiarioTelegram = this.hojeLocal();
-                merged.filaTelegramPendente = [];
-                this.data = merged;
+                this._mesclarDadosNuvemInteligente(cloudPayload, cloudSaveTime);
                 localStorage.setItem(this.storageKey, JSON.stringify(this.data));
                 if (typeof UI !== 'undefined' && typeof UI._atualizarAlertas === 'function') {
                     UI._atualizarAlertas();
@@ -1271,6 +1265,191 @@ class DataManager {
                 await this.salvarNuvemCloudflare();
             }
         } catch (e) {}
+    }
+
+    // ===== MESCLAGEM INTELIGENTE DE NUVEM (UNIÃO SEGURA - NUNCA PERDER DADOS) =====
+    _mesclarDadosNuvemInteligente(cloudPayload, cloudSaveTime = 0) {
+        if (!cloudPayload || typeof cloudPayload !== 'object') return this.data;
+        const localSaveTime = (this.data && this.data._ultimoSaveLocal) || 0;
+        const defCloud = this.getDefaultData();
+        const mergedData = this._merge(defCloud, cloudPayload);
+        mergedData.tabelaServicosModelo = { ...(cloudPayload.tabelaServicosModelo || {}), ...(defCloud.tabelaServicosModelo || {}), ...((this.data && this.data.tabelaServicosModelo) || {}) };
+        const localTemDados = Boolean(this.data && this.data._ultimoSaveLocal && this.data._ultimoSaveLocal > 0);
+
+        const mergeArrayPorId = (localArr, cloudArr, idField) => {
+            const map = new Map();
+            (cloudArr || []).forEach(item => { if (item && item[idField] !== undefined) map.set(String(item[idField]), item); });
+            (localArr || []).forEach(item => { if (item && item[idField] !== undefined) map.set(String(item[idField]), item); });
+            return Array.from(map.values());
+        };
+
+        const maiorArrayVence = (localArr, cloudArr) => {
+            const l = (localArr || []).length;
+            const c = (cloudArr || []).length;
+            if (l === 0) return cloudArr || [];
+            if (c === 0) return localArr || [];
+            return l >= c ? localArr : cloudArr;
+        };
+
+        // 1. Ordens de Serviço (merge inteligente por número)
+        if (this.data && this.data.assistencia && this.data.assistencia.ordensServico) {
+            const localOS = this.data.assistencia.ordensServico || [];
+            const cloudOS = (cloudPayload.assistencia && cloudPayload.assistencia.ordensServico) || [];
+            const mapOS = new Map();
+            cloudOS.forEach(o => mapOS.set(String(o.numero), o));
+            localOS.forEach(o => {
+                const existing = mapOS.get(String(o.numero));
+                if (!existing || (o.dataEntrega && !existing.dataEntrega) || o.status !== existing.status) {
+                    mapOS.set(String(o.numero), o);
+                }
+            });
+            if (!mergedData.assistencia) mergedData.assistencia = {};
+            mergedData.assistencia.ordensServico = Array.from(mapOS.values()).sort((a, b) => b.numero - a.numero);
+        } else if (cloudPayload.assistencia && cloudPayload.assistencia.ordensServico) {
+            mergedData.assistencia = cloudPayload.assistencia;
+        }
+
+        // 2. Clientes (merge por nome — UNIÃO)
+        {
+            const localClientes = (this.data && this.data.clientes && Array.isArray(this.data.clientes)) ? this.data.clientes : [];
+            const cloudClientes = cloudPayload.clientes || [];
+            const mapClientes = new Map();
+            cloudClientes.forEach(c => mapClientes.set((c.nome || '').toLowerCase().trim(), c));
+            localClientes.forEach(c => {
+                const key = (c.nome || '').toLowerCase().trim();
+                if (key) {
+                    const existing = mapClientes.get(key);
+                    if (!existing || (c.historico && c.historico.length > (existing.historico || []).length)) {
+                        mapClientes.set(key, c);
+                    }
+                }
+            });
+            mergedData.clientes = Array.from(mapClientes.values());
+        }
+
+        // 3. Produtos Procurados (UNIÃO por ID)
+        {
+            const localProc = (this.data && this.data.produtosProcurados && Array.isArray(this.data.produtosProcurados)) ? this.data.produtosProcurados : [];
+            const cloudProc = cloudPayload.produtosProcurados || [];
+            mergedData.produtosProcurados = mergeArrayPorId(localProc, cloudProc, 'id');
+        }
+
+        // 4. Histórico de Vendas e Movimentações (UNIÃO com deduplicação — nunca perder vendas de hoje)
+        {
+            const localVendas = (this.data && this.data.historico && this.data.historico.vendas) || [];
+            const cloudVendas = (cloudPayload.historico && cloudPayload.historico.vendas) || [];
+            if (localVendas.length > 0 && cloudVendas.length > 0) {
+                const mapVendas = new Map();
+                cloudVendas.forEach(v => {
+                    const k = v.id || `${v.data}_${v.produto}_${v.valorVenda || v.valorBruto || 0}`;
+                    mapVendas.set(k, v);
+                });
+                localVendas.forEach(v => {
+                    const k = v.id || `${v.data}_${v.produto}_${v.valorVenda || v.valorBruto || 0}`;
+                    mapVendas.set(k, v);
+                });
+                if (!mergedData.historico) mergedData.historico = { vendas: [], compras: [], movimentacoes: [] };
+                mergedData.historico.vendas = Array.from(mapVendas.values());
+            } else {
+                if (!mergedData.historico) mergedData.historico = { vendas: [], compras: [], movimentacoes: [] };
+                mergedData.historico.vendas = maiorArrayVence(localVendas, cloudVendas);
+            }
+        }
+        {
+            const localMovs = (this.data && this.data.movimentacoesCaixa) || [];
+            const cloudMovs = cloudPayload.movimentacoesCaixa || [];
+            if (localMovs.length > 0 && cloudMovs.length > 0) {
+                const mapMovs = new Map();
+                cloudMovs.forEach(m => {
+                    const k = m.id || `${m.data}_${m.tipo}_${m.valor || 0}`;
+                    mapMovs.set(k, m);
+                });
+                localMovs.forEach(m => {
+                    const k = m.id || `${m.data}_${m.tipo}_${m.valor || 0}`;
+                    mapMovs.set(k, m);
+                });
+                mergedData.movimentacoesCaixa = Array.from(mapMovs.values());
+            } else {
+                mergedData.movimentacoesCaixa = maiorArrayVence(localMovs, cloudMovs);
+            }
+        }
+
+        // 5. DADOS FINANCEIROS — Preservar saldo local se local for mais recente ou tiver vendas/movimentações
+        const localMovsCount = (this.data && this.data.movimentacoesCaixa && this.data.movimentacoesCaixa.length) || 0;
+        const cloudMovsCount = (cloudPayload && cloudPayload.movimentacoesCaixa && cloudPayload.movimentacoesCaixa.length) || 0;
+        const localVendasCount = (this.data && this.data.historico && this.data.historico.vendas && this.data.historico.vendas.length) || 0;
+        const cloudVendasCount = (cloudPayload && cloudPayload.historico && cloudPayload.historico.vendas && cloudPayload.historico.vendas.length) || 0;
+
+        if (localTemDados && (localSaveTime >= cloudSaveTime || localVendasCount >= cloudVendasCount || localMovsCount >= cloudMovsCount)) {
+            if (this.data.financeiro) mergedData.financeiro = this.data.financeiro;
+            if (this.data.comissaoIlannaMensal !== undefined) mergedData.comissaoIlannaMensal = this.data.comissaoIlannaMensal;
+            if (this.data.logComissaoMensal) mergedData.logComissaoMensal = this.data.logComissaoMensal;
+        }
+
+        // 6. ESTOQUE — Merge inteligente por ID (UNIÃO, nunca perder itens)
+        {
+            const localCel = (this.data && this.data.estoqueCelulares && Array.isArray(this.data.estoqueCelulares)) ? this.data.estoqueCelulares : [];
+            const cloudCel = cloudPayload.estoqueCelulares || [];
+            mergedData.estoqueCelulares = localTemDados ? mergeArrayPorId(localCel, cloudCel, 'id') : (cloudCel.length > 0 ? cloudCel : localCel);
+        }
+        {
+            const localAc = (this.data && this.data.estoqueAcessorios && Array.isArray(this.data.estoqueAcessorios)) ? this.data.estoqueAcessorios : [];
+            const cloudAc = cloudPayload.estoqueAcessorios || [];
+            mergedData.estoqueAcessorios = localTemDados ? mergeArrayPorId(localAc, cloudAc, 'id') : (cloudAc.length > 0 ? cloudAc : localAc);
+        }
+        if (this.data && this.data.estoqueFogos && Array.isArray(this.data.estoqueFogos) && this.data.estoqueFogos.length > 0) {
+            mergedData.estoqueFogos = this.data.estoqueFogos;
+        }
+        if (this.data && this.data.estoqueUsoLoja && Array.isArray(this.data.estoqueUsoLoja) && this.data.estoqueUsoLoja.length > 0) {
+            mergedData.estoqueUsoLoja = this.data.estoqueUsoLoja;
+        }
+
+        // 7. Crediários (UNIÃO por ID)
+        {
+            const localCred = (this.data && this.data.crediarios && Array.isArray(this.data.crediarios)) ? this.data.crediarios : [];
+            const cloudCred = cloudPayload.crediarios || [];
+            mergedData.crediarios = mergeArrayPorId(localCred, cloudCred, 'id');
+        }
+
+        // 8. Checklist, Bloco de Notas, Divisão de Lucro — se local tiver dados, mantém local
+        if (localTemDados) {
+            if (this.data.checklistDiario) mergedData.checklistDiario = this.data.checklistDiario;
+            if (this.data.blocoNotas) mergedData.blocoNotas = this.data.blocoNotas;
+            if (this.data.divisaoLucro) mergedData.divisaoLucro = this.data.divisaoLucro;
+            if (this.data.fundoCustoEstoque) mergedData.fundoCustoEstoque = this.data.fundoCustoEstoque;
+            if (this.data.fundoReposicaoFogos) mergedData.fundoReposicaoFogos = this.data.fundoReposicaoFogos;
+            if (this.data.ultimoFechamentoAutoTelegram) mergedData.ultimoFechamentoAutoTelegram = this.data.ultimoFechamentoAutoTelegram;
+            if (this.data.ultimoFechamentoDiario) mergedData.ultimoFechamentoDiario = this.data.ultimoFechamentoDiario;
+        }
+
+        this.data = mergedData;
+        return mergedData;
+    }
+
+    iniciarVerificacaoFechamento18h() {
+        if (typeof window === 'undefined') return;
+        if (this._intervalFechamento18h) return;
+        this._intervalFechamento18h = setInterval(async () => {
+            try {
+                const agora = new Date();
+                const horaStr = this.horaLocal(agora);
+                const hoje = this.hojeLocal(agora);
+                const [hStr] = (horaStr || '').split(':');
+                const h = parseInt(hStr, 10);
+
+                if (h >= 18 && this.data && this.data.ultimoFechamentoAutoTelegram !== hoje) {
+                    const cfg = this.getConfigTelegram();
+                    if (cfg.autoFechamento !== false) {
+                        this.data.ultimoFechamentoAutoTelegram = hoje;
+                        this.saveData();
+                        console.log(`[StrategyOS] ⏰ 18h atingido! Enviando Fechamento Diário Automático (${hoje})...`);
+                        await this.enviarFechamentoDiarioTelegram(hoje);
+                    }
+                }
+            } catch (err) {
+                console.warn('[StrategyOS] Erro na verificação do fechamento 18h:', err);
+            }
+        }, 30000);
     }
 
     // ===== PRODUTOS SEM CUSTO =====
@@ -4221,7 +4400,27 @@ class DataManager {
             
             // ===== MOVIMENTAÇÕES DO DIA (despesas, sangrias, etc.) =====
             const movs = this.data.movimentacoesCaixa || [];
-            const movsHoje = movs.filter(m => m.data && m.data.startsWith(hojeYMD));
+            const movsHoje = movs.filter(m => {
+                const ts = this.parseDataSafe(m.data);
+                const dStr = ts > 0 ? this.hojeLocal(new Date(ts)) : (m.data || '').substring(0, 10);
+                return dStr === hojeYMD;
+            });
+
+            // Fallback seguro: se historico.vendas estava vazio hoje mas houve vendas nas movimentações
+            if (vendasHoje.length === 0 && movsHoje.length > 0) {
+                movsHoje.forEach(m => {
+                    const ehVenda = typeof this.isMovimentacaoVendaReal === 'function' ? this.isMovimentacaoVendaReal(m) : (m.tipo === 'venda' || m.tipo === 'entrada');
+                    if (ehVenda) {
+                        const val = parseFloat(m.valor || 0);
+                        if (val > 0 && val < 50000) {
+                            const custo = parseFloat(m.custo || 0);
+                            const lucro = Math.max(0, val - custo);
+                            totalVendasLoja += val;
+                            listaVendas.push(`   ${listaVendas.length + 1}. 🛍️ ${m.descricao || m.motivo || 'Venda Balcão'} — *${R(val)}* [Lucro: ${R(lucro)}]`);
+                        }
+                    }
+                });
+            }
             let despesasTotal = 0;
             let listaDespesas = [];
             let observacoesFechamento = [];

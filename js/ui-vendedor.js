@@ -454,8 +454,8 @@ UI._verDashboardDesempenhoVendedor = function () {
 UI._renderGraficoVendedorDiario = function (container, diasNoMes, diaAtual, totalVendasMes, metaDiariaIdeal) {
     if (!container) return;
 
-    const movs = dataManager.data.movimentacoesCaixa || [];
     const vendasHist = (dataManager.data.historico && dataManager.data.historico.vendas) || [];
+    const movs = dataManager.data.movimentacoesCaixa || [];
     const vendasPorDia = {};
     for (let d = 1; d <= diasNoMes; d++) vendasPorDia[d] = 0;
 
@@ -463,33 +463,50 @@ UI._renderGraficoVendedorDiario = function (container, diasNoMes, diaAtual, tota
     const mes = String(new Date().getMonth() + 1).padStart(2, '0');
     const prefixoMes = `${ano}-${mes}`;
 
-    let encontrouMovs = false;
-    movs.forEach(m => {
-        if (m.data && m.data.startsWith(prefixoMes) && (m.caixa === 'caixaSecundario' || m.caixaDestino === 'caixaSecundario' || !m.caixaDestino) && m.tipo !== 'saida' && m.tipo !== 'zerado') {
-            const diaStr = m.data.split('T')[0].split('-')[2];
-            const diaNum = parseInt(diaStr, 10);
-            if (diaNum >= 1 && diaNum <= diasNoMes) {
-                vendasPorDia[diaNum] += (m.valor || m.valorVenda || 0);
-                encontrouMovs = true;
-            }
-        }
-    });
+    let encontrouVendas = false;
 
+    // 1. Somar vendas reais registradas no histÃ³rico para o mÃªs
     vendasHist.forEach(v => {
-        if (v.data && v.data.startsWith(prefixoMes) && (v.caixaDestino === 'caixaSecundario' || !v.caixaDestino)) {
-            const diaStr = v.data.split('T')[0].split('-')[2];
-            const diaNum = parseInt(diaStr, 10);
+        if (!v.data) return;
+        const ts = typeof dataManager.parseDataSafe === 'function' ? dataManager.parseDataSafe(v.data) : 0;
+        const dStr = ts > 0 && typeof dataManager.hojeLocal === 'function' ? dataManager.hojeLocal(new Date(ts)) : (v.data || '').substring(0, 10);
+        if (dStr.startsWith(prefixoMes)) {
+            const diaNum = parseInt(dStr.split('-')[2], 10);
             if (diaNum >= 1 && diaNum <= diasNoMes) {
-                const val = (v.valorVenda || v.valorBruto || v.liquido || 0);
-                if (val > 0) {
-                    vendasPorDia[diaNum] = Math.max(vendasPorDia[diaNum], val);
-                    encontrouMovs = true;
+                const val = parseFloat(v.valorVenda || v.valorBruto || v.liquido || 0);
+                if (val > 0 && val < 50000) {
+                    vendasPorDia[diaNum] += val;
+                    encontrouVendas = true;
                 }
             }
         }
     });
 
-    if (!encontrouMovs && totalVendasMes > 0) {
+    // 2. Fallback: se nÃ£o houver vendas no histÃ³rico mas houver movimentaÃ§Ãµes reais de venda
+    if (!encontrouVendas) {
+        movs.forEach(m => {
+            if (!m.data) return;
+            const ts = typeof dataManager.parseDataSafe === 'function' ? dataManager.parseDataSafe(m.data) : 0;
+            const dStr = ts > 0 && typeof dataManager.hojeLocal === 'function' ? dataManager.hojeLocal(new Date(ts)) : (m.data || '').substring(0, 10);
+            if (dStr.startsWith(prefixoMes)) {
+                const ehVendaReal = typeof dataManager.isMovimentacaoVendaReal === 'function' 
+                    ? dataManager.isMovimentacaoVendaReal(m) 
+                    : (m.tipo === 'venda' || m.tipo === 'entrada');
+                if (ehVendaReal) {
+                    const diaNum = parseInt(dStr.split('-')[2], 10);
+                    if (diaNum >= 1 && diaNum <= diasNoMes) {
+                        const val = parseFloat(m.valor || m.valorVenda || 0);
+                        if (val > 0 && val < 50000) {
+                            vendasPorDia[diaNum] += val;
+                            encontrouVendas = true;
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    if (!encontrouVendas && totalVendasMes > 0) {
         const acumuladoPorDia = totalVendasMes / Math.max(1, diaAtual);
         for (let d = 1; d <= diaAtual; d++) {
             vendasPorDia[d] = Math.round(acumuladoPorDia * (0.8 + (d % 3) * 0.2) * 100) / 100;

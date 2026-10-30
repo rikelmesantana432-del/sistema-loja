@@ -405,7 +405,10 @@ const UI = {
                     }
                 }
             });
-            if (typeof UI._renderGraficoVendas === 'function') UI._renderGraficoVendas();
+            const gContainer = document.getElementById('grafico-vendas');
+            if (typeof UI._renderGraficoVendas === 'function' && gContainer) {
+                UI._renderGraficoVendas(gContainer, 7);
+            }
         }, 50);
     },
 

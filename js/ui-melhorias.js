@@ -164,34 +164,50 @@ UI._fecharCommandPalette = function () {
 
 // === 2.2 — GRÁFICO DE VENDAS NO DASHBOARD ===
 UI._renderGraficoVendas = function (containerEl, dias = 7) {
+    if (!containerEl) {
+        containerEl = document.getElementById('grafico-vendas');
+    }
     if (!containerEl) return;
     const vendas = (dataManager.data.historico && dataManager.data.historico.vendas) || [];
-    const movs = (dataManager.data.movimentacoesCaixa || []).concat((dataManager.data.historico && dataManager.data.historico.movimentacoes) || []);
+    const movs = dataManager.data.movimentacoesCaixa || [];
     const hoje = new Date();
     const diasData = [];
 
     for (let i = dias - 1; i >= 0; i--) {
         const d = new Date(hoje);
         d.setDate(d.getDate() - i);
-        const key = d.toISOString().split('T')[0];
+        const ano = d.getFullYear();
+        const mes = String(d.getMonth() + 1).padStart(2, '0');
+        const dia = String(d.getDate()).padStart(2, '0');
+        const key = `${ano}-${mes}-${dia}`;
         const label = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][d.getDay()];
         
-        let total = vendas.filter(v => v.data && v.data.startsWith(key))
-                          .reduce((s, v) => {
-                              const val = parseFloat(v.valorVenda) || parseFloat(v.valorBruto) || parseFloat(v.liquido) || 0;
-                              return s + (val < 50000 ? val : 0);
-                          }, 0);
-        
-        const totalMovs = movs.filter(m => {
-            if (!m.data || !m.data.startsWith(key)) return false;
-            const tp = String(m.tipo || '');
-            if (tp.includes('fechamento') || tp === 'saida' || tp === 'despesa' || tp === 'zerado') return false;
-            const val = parseFloat(m.valor || 0);
-            return val > 0 && val < 50000;
-        }).reduce((s, m) => s + (parseFloat(m.valor) || 0), 0);
+        let total = vendas.filter(v => {
+            const ts = typeof dataManager.parseDataSafe === 'function' ? dataManager.parseDataSafe(v.data) : 0;
+            const dStr = ts > 0 && typeof dataManager.hojeLocal === 'function' ? dataManager.hojeLocal(new Date(ts)) : (v.data || '').substring(0, 10);
+            return dStr === key;
+        }).reduce((s, v) => {
+            const val = parseFloat(v.valorVenda) || parseFloat(v.valorBruto) || parseFloat(v.liquido) || 0;
+            return s + (val > 0 && val < 50000 ? val : 0);
+        }, 0);
 
-        total = Math.min(total + totalMovs, 50000);
-        diasData.push({ key, label, total });
+        if (total === 0) {
+            total = movs.filter(m => {
+                const ts = typeof dataManager.parseDataSafe === 'function' ? dataManager.parseDataSafe(m.data) : 0;
+                const dStr = ts > 0 && typeof dataManager.hojeLocal === 'function' ? dataManager.hojeLocal(new Date(ts)) : (m.data || '').substring(0, 10);
+                if (dStr !== key) return false;
+                if (typeof dataManager.isMovimentacaoVendaReal === 'function') {
+                    return dataManager.isMovimentacaoVendaReal(m);
+                }
+                const tp = String(m.tipo || '').toLowerCase();
+                return tp === 'venda' || tp === 'entrada';
+            }).reduce((s, m) => {
+                const val = parseFloat(m.valor || 0);
+                return s + (val > 0 && val < 50000 ? val : 0);
+            }, 0);
+        }
+
+        diasData.push({ key, label, total: Math.min(total, 50000) });
     }
 
     const maxVal = Math.max(...diasData.map(d => d.total), 100);
