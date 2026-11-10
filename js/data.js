@@ -1309,6 +1309,17 @@ class DataManager {
                     bkp._hidratadoBackup20261023 = true;
                     bkp._hidratadoBackup20261023_v2 = true;
                     bkp._ultimoSaveLocal = 0; // Semente inicial: nunca deve sobrescrever a nuvem antes de sincronizar
+                    bkp._isSeedBackup = true;
+                    const hojeSeed = this.hojeLocal();
+                    const chaveCicloSeed = this._chaveCicloMensal(hojeSeed);
+                    if (bkp.ultimoCicloZerado !== chaveCicloSeed && bkp.ultimoZeramentoId !== chaveCicloSeed) {
+                        bkp.financeiro = { ...(bkp.financeiro || {}), caixaPrincipal: 0, caixaSecundario: 0 };
+                        bkp.comissaoIlannaMensal = 0;
+                        bkp.dataInicioCicloMeta = this._inicioCicloPorChave(chaveCicloSeed, hojeSeed);
+                        bkp.ultimoCicloZerado = chaveCicloSeed;
+                        bkp.ultimoZeramentoId = chaveCicloSeed;
+                        if (bkp.meta) bkp.meta.progressoAtual = 0;
+                    }
                     saved = JSON.stringify(bkp);
                     try { localStorage.setItem(this.storageKey, saved); } catch (e) {}
                 }
@@ -1460,6 +1471,7 @@ class DataManager {
             const isBootOrSilent = Boolean(this._booting || (opcoes && opcoes.silencioso));
             if (!isBootOrSilent) {
                 this.data._ultimoSaveLocal = Date.now();
+                delete this.data._isSeedBackup;
             }
             const jsonStr = JSON.stringify(this.data);
             localStorage.setItem(this.storageKey, jsonStr);
@@ -1613,7 +1625,7 @@ class DataManager {
         const defCloud = this.getDefaultData();
         const mergedData = this._merge(defCloud, cloudPayload);
         mergedData.tabelaServicosModelo = { ...(cloudPayload.tabelaServicosModelo || {}), ...(defCloud.tabelaServicosModelo || {}), ...((this.data && this.data.tabelaServicosModelo) || {}) };
-        const localTemDados = Boolean(this.data && this.data._ultimoSaveLocal && this.data._ultimoSaveLocal > 0);
+        const localTemDados = Boolean(this.data && this.data._ultimoSaveLocal && this.data._ultimoSaveLocal > 0 && !this.data._isSeedBackup);
         const idsEstornados = new Set([
             ...((this.data && Array.isArray(this.data._idsEstornados)) ? this.data._idsEstornados.map(String) : []),
             ...((cloudPayload && Array.isArray(cloudPayload._idsEstornados)) ? cloudPayload._idsEstornados.map(String) : [])
@@ -1731,7 +1743,7 @@ class DataManager {
             }
         }
 
-        // 5. DADOS FINANCEIROS — Preservar o maior saldo ou mais recente e depois reconciliar pelo extrato do ciclo
+        // 5. DADOS FINANCEIROS — Aceita nuvem limpa quando nuvem for mais recente ou local for seed; reconcilia o extrato logo abaixo
         if (this.data && this.data.financeiro && cloudPayload.financeiro) {
             if (!mergedData.financeiro) mergedData.financeiro = {};
             const fLocal = this.data.financeiro;
@@ -1740,8 +1752,6 @@ class DataManager {
                 mergedData.financeiro = { ...fCloud, ...fLocal };
             } else {
                 mergedData.financeiro = { ...fLocal, ...fCloud };
-                mergedData.financeiro.caixaSecundario = Math.max(parseFloat(fLocal.caixaSecundario) || 0, parseFloat(fCloud.caixaSecundario) || 0);
-                mergedData.financeiro.caixaPrincipal = Math.max(parseFloat(fLocal.caixaPrincipal) || 0, parseFloat(fCloud.caixaPrincipal) || 0);
             }
         }
 
@@ -1770,16 +1780,24 @@ class DataManager {
             mergedData.crediarios = mergeArrayPorId(localCred, cloudCred, 'id');
         }
 
-        // 8. Checklist, Bloco de Notas, Divisão de Lucro — se local tiver dados, mantém local
-        if (localTemDados) {
+        // 8. Checklist, Bloco de Notas, Divisão de Lucro — preserva local apenas se local for mais recente do que nuvem
+        if (localTemDados && localSaveTime >= cloudSaveTime) {
             if (this.data.checklistDiario) mergedData.checklistDiario = this.data.checklistDiario;
             if (this.data.blocoNotas) mergedData.blocoNotas = this.data.blocoNotas;
             if (this.data.divisaoLucro) mergedData.divisaoLucro = this.data.divisaoLucro;
             if (this.data.fundoCustoEstoque) mergedData.fundoCustoEstoque = this.data.fundoCustoEstoque;
             if (this.data.fundoReposicaoFogos) mergedData.fundoReposicaoFogos = this.data.fundoReposicaoFogos;
-            if (this.data.ultimoFechamentoAutoTelegram) mergedData.ultimoFechamentoAutoTelegram = this.data.ultimoFechamentoAutoTelegram;
-            if (this.data.ultimoFechamentoDiario) mergedData.ultimoFechamentoDiario = this.data.ultimoFechamentoDiario;
         }
+        if (localTemDados && this.data.ultimoFechamentoAutoTelegram && (!mergedData.ultimoFechamentoAutoTelegram || this.data.ultimoFechamentoAutoTelegram > mergedData.ultimoFechamentoAutoTelegram)) {
+            mergedData.ultimoFechamentoAutoTelegram = this.data.ultimoFechamentoAutoTelegram;
+        }
+        if (localTemDados && this.data.ultimoFechamentoDiario && (!mergedData.ultimoFechamentoDiario || this.data.ultimoFechamentoDiario > mergedData.ultimoFechamentoDiario)) {
+            mergedData.ultimoFechamentoDiario = this.data.ultimoFechamentoDiario;
+        }
+        if (!localTemDados && cloudSaveTime > 0) {
+            mergedData._ultimoSaveLocal = cloudSaveTime;
+        }
+        delete mergedData._isSeedBackup;
 
         this.reconciliarFinanceiroCicloAtual(mergedData);
         this.data = mergedData;

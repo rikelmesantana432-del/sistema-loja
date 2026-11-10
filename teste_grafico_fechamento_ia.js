@@ -271,5 +271,34 @@ if (dm.data.historico.vendas.length !== 2 || dm.data.assistencia.ordensServico.l
 }
 console.log('✅ [PASSOU] Merge preservou 2 vendas do mesmo minuto e 2 OS históricas sem colisão!');
 
+console.log('\n=== TESTE 9: NAVEGADOR LIMPO HIDRATADO COM SEED NÃO RESSUSCITA SALDO ANTIGO DA SEMENTE ===');
+sandbox.localStorage.clear();
+sandbox.INITIAL_BACKUP_DATA = {
+    versao: '3.1.0',
+    financeiro: { caixaPrincipal: 5917.14, caixaSecundario: 5618.64, caixaFogos: 4945.74 },
+    comissaoIlannaMensal: 6693.99,
+    historico: { vendas: [{ id: 'old_oct', data: '2026-10-20T12:00:00Z', produto: 'Antiga', valorVenda: 50 }] },
+    movimentacoesCaixa: [],
+    assistencia: { ordensServico: [], proximoNumero: 1 },
+    clientes: [],
+    estoqueCelulares: [],
+    estoqueAcessorios: []
+};
+dm.data = dm.loadData();
+delete sandbox.INITIAL_BACKUP_DATA;
+dm._mesclarDadosNuvemInteligente({
+    _ultimoSaveLocal: Date.now() + 2000,
+    dataInicioCicloMeta: dm.data.dataInicioCicloMeta,
+    ultimoZeramentoId: dm.data.ultimoZeramentoId,
+    financeiro: { caixaPrincipal: 1274.29, caixaSecundario: 128, caixaFogos: 5135.74 },
+    historico: { vendas: [{ id: 'nov_1', data: hoje + 'T11:00:00Z', produto: 'Capinha', valorVenda: 128, custo: 10 }] },
+    movimentacoesCaixa: []
+}, Date.now() + 2000);
+if (Math.abs(dm.data.financeiro.caixaPrincipal - 1274.29) > 0.01 || Math.abs(dm.data.financeiro.caixaSecundario - 128) > 0.01) {
+    console.error('❌ [FALHOU] Seed inicial contaminou saldos da nuvem!', dm.data.financeiro);
+    process.exit(1);
+}
+console.log('✅ [PASSOU] Seed inicial respeitou saldos da nuvem (CP=1274.29, CS=128.00) sem ressuscitar 5917.14!');
+
 console.log('\n=== TODOS OS TESTES ESPECÍFICOS DE GRÁFICO, FECHAMENTO E SYNC PASSARAM COM SUCESSO! ===');
 setTimeout(() => process.exit(0), 50);

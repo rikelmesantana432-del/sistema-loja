@@ -1,5 +1,5 @@
-// StrategyOS PWA Service Worker v10.11.1-mobile
-const CACHE_NAME = 'strategyos-v10.11.1-mobile';
+// StrategyOS PWA Service Worker v10.11.2-mobile
+const CACHE_NAME = 'strategyos-v10.11.2-mobile';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
