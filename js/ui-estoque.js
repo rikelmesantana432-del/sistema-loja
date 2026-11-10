@@ -407,22 +407,33 @@ UI._estoqueConfirmarNovo = function () {
 
 // Vender do estoque
 UI._estoqueVender = function (id, tipo) {
-    let lista = (tipo === 'acess' || tipo === 'acessorio') ? dataManager.data.estoqueAcessorios : dataManager.data.estoqueCelulares;
-    let prod = lista ? lista.find(p => String(p.id) === String(id)) : null;
+    let ehAcess = (tipo === 'acess' || tipo === 'acessorio');
+    let prod = ehAcess
+        ? (dataManager.data.estoqueAcessorios || []).find(p => String(p.id) === String(id))
+        : (dataManager.data.estoqueCelulares || []).find(p => String(p.id) === String(id));
+
     if (!prod && dataManager.data) {
-        const outraLista = (tipo === 'acess' || tipo === 'acessorio') ? dataManager.data.estoqueCelulares : dataManager.data.estoqueAcessorios;
-        if (outraLista) prod = outraLista.find(p => String(p.id) === String(id));
+        if (ehAcess) {
+            prod = (dataManager.data.estoqueCelulares || []).find(p => String(p.id) === String(id));
+            if (prod) ehAcess = false;
+        } else {
+            prod = (dataManager.data.estoqueAcessorios || []).find(p => String(p.id) === String(id));
+            if (prod) ehAcess = true;
+        }
     }
     if (!prod) return UI.toast('Produto não encontrado!', 'error');
-    const qtd = prod.quantidade || 1;
-    if (qtd <= 0) return UI.toast('Produto esgotado!', 'error');
-    prod.quantidade = qtd - 1;
-    
-    if (tipo === 'acess' && dataManager.venderAcessorio) {
-        dataManager.venderAcessorio(id, prod.precoVenda, 'Cliente Loja');
+    const qtd = prod.quantidade !== undefined ? prod.quantidade : 1;
+    if (qtd <= 0 || prod.status === 'vendido') return UI.toast('Produto esgotado!', 'error');
+
+    if (ehAcess && typeof dataManager.venderAcessorio === 'function') {
+        dataManager.venderAcessorio(id, prod.precoVenda, 'Cliente Loja', 'caixaSecundario');
+    } else if (!ehAcess && typeof dataManager.venderAVista === 'function') {
+        dataManager.venderAVista(id, prod.precoVenda, 'Cliente Loja', 'caixaSecundario');
     } else {
+        if (qtd > 1) prod.quantidade = qtd - 1;
+        else { prod.quantidade = 0; prod.status = 'vendido'; }
         dataManager._registrarSincronizacaoFinanceira({
-            tipo: 'venda_' + (tipo === 'acess' ? 'acessorio' : 'celular'),
+            tipo: 'venda_' + (ehAcess ? 'acessorio' : 'celular'),
             produto: prod.nome,
             valorVenda: prod.precoVenda,
             custo: prod.custo,

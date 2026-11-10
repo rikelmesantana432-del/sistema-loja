@@ -276,6 +276,11 @@ UI.renderVendedor = function () {
                     <span class="vendedor-btn-title reg-card-title" style="color:#3b82f6;font-size:22px;font-weight:900;display:block;">CLIENTES</span>
                     <span class="vendedor-btn-desc" style="font-size:14px;color:var(--text-muted);margin-top:4px;">Cadastrados & Histórico</span>
                 </button>
+                <button class="vendedor-btn reg-card" style="border-color:#10b981;background:rgba(16,185,129,0.12);padding:22px 16px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:16px;text-align:center;" onclick="UI._vendedorWhatsAppClientes()">
+                    <span class="vendedor-btn-icon reg-card-icon" style="font-size:42px;margin-bottom:8px">📲</span>
+                    <span class="vendedor-btn-title reg-card-title" style="color:#00FFA3;font-size:20px;font-weight:900;display:block;">WHATSAPP CLIENTES</span>
+                    <span class="vendedor-btn-desc" style="font-size:14px;color:var(--text-muted);margin-top:4px;">Recaptura Black & Grupo VIP</span>
+                </button>
                 <button class="vendedor-btn reg-card" style="border-color:#ef4444;background:rgba(239,68,68,0.08);padding:22px 16px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:16px;text-align:center;" onclick="UI._vendedorRegistrarGastoLoja()">
                     <span class="vendedor-btn-icon reg-card-icon" style="font-size:42px;margin-bottom:8px">💸</span>
                     <span class="vendedor-btn-title reg-card-title" style="color:#ef4444;font-size:22px;font-weight:900;display:block;">GASTO DA LOJA</span>
@@ -369,11 +374,14 @@ UI._verDashboardDesempenhoVendedor = function () {
     const comissao = excedente * 0.1;
 
 
-    const agora = new Date();
-    const nomeMes = agora.toLocaleString('pt-BR', { month: 'long' }).toUpperCase();
-    const ano = agora.getFullYear();
-    const diaAtual = agora.getDate();
-    const diasNoMes = new Date(ano, agora.getMonth() + 1, 0).getDate();
+    const hojeYMD = (dataManager && typeof dataManager.hojeLocal === 'function')
+        ? dataManager.hojeLocal()
+        : new Date().toISOString().substring(0, 10);
+    const [anoNum, mesNum, diaAtual] = hojeYMD.split('-').map(Number);
+    const agoraAnchor = new Date(anoNum, mesNum - 1, diaAtual, 12, 0, 0);
+    const nomeMes = agoraAnchor.toLocaleString('pt-BR', { month: 'long' }).toUpperCase();
+    const ano = anoNum;
+    const diasNoMes = new Date(ano, mesNum, 0).getDate();
 
     const metaDiariaIdeal = meta / diasNoMes;
     const mediaVendaDiaria = totalVendasMes / Math.max(1, diaAtual);
@@ -451,6 +459,27 @@ UI._verDashboardDesempenhoVendedor = function () {
     }, 100);
 };
 
+UI._vendedorWhatsAppClientes = function () {
+    const main = document.getElementById('main-content');
+    if (!main) return;
+    const painelHtml = (typeof IARecaptura !== 'undefined' && typeof IARecaptura.renderPainelRecaptura === 'function')
+        ? `<div id="ia-recaptura-host">${IARecaptura.renderPainelRecaptura()}</div>`
+        : `<div style="padding:20px;color:#ef4444;text-align:center;font-weight:700;">Motor de Recaptura WhatsApp não carregado. Recarregue a página.</div>`;
+    main.innerHTML = _vndWrap('vender', `
+        <div style="max-width:960px;margin:0 auto;padding:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+                <div>
+                    <span class="vendedor-step-badge" style="background:#10b981;color:#052e16;">RECAPTURA VIP BLACK</span>
+                    <h2 style="font-size:24px;color:#00FFA3;margin:4px 0 0;">📲 WHATSAPP CLIENTES (2 ETAPAS ANTI-BAN)</h2>
+                </div>
+                <button onclick="UI.renderVendedor()" class="btn btn-ghost">← Voltar ao Menu</button>
+            </div>
+            ${painelHtml}
+        </div>
+    `);
+    if (typeof IARecaptura !== 'undefined') setTimeout(() => IARecaptura.renderListaCards(), 20);
+};
+
 UI._renderGraficoVendedorDiario = function (container, diasNoMes, diaAtual, totalVendasMes, metaDiariaIdeal) {
     if (!container) return;
 
@@ -459,58 +488,46 @@ UI._renderGraficoVendedorDiario = function (container, diasNoMes, diaAtual, tota
     const vendasPorDia = {};
     for (let d = 1; d <= diasNoMes; d++) vendasPorDia[d] = 0;
 
-    const ano = new Date().getFullYear();
-    const mes = String(new Date().getMonth() + 1).padStart(2, '0');
-    const prefixoMes = `${ano}-${mes}`;
+    const hojeYMD = (dataManager && typeof dataManager.hojeLocal === 'function')
+        ? dataManager.hojeLocal()
+        : new Date().toISOString().substring(0, 10);
+    const prefixoMes = hojeYMD.substring(0, 7);
 
-    let encontrouVendas = false;
-
-    // 1. Somar vendas reais registradas no histÃ³rico para o mÃªs
-    vendasHist.forEach(v => {
-        if (!v.data) return;
-        const ts = typeof dataManager.parseDataSafe === 'function' ? dataManager.parseDataSafe(v.data) : 0;
-        const dStr = ts > 0 && typeof dataManager.hojeLocal === 'function' ? dataManager.hojeLocal(new Date(ts)) : (v.data || '').substring(0, 10);
-        if (dStr.startsWith(prefixoMes)) {
-            const diaNum = parseInt(dStr.split('-')[2], 10);
-            if (diaNum >= 1 && diaNum <= diasNoMes) {
-                const val = parseFloat(v.valorVenda || v.valorBruto || v.liquido || 0);
-                if (val > 0 && val < 50000) {
-                    vendasPorDia[diaNum] += val;
-                    encontrouVendas = true;
+    if (typeof dataManager.calcularTotalVendidoDiaLocal === 'function') {
+        for (let d = 1; d <= diasNoMes; d++) {
+            const dKey = `${prefixoMes}-${String(d).padStart(2, '0')}`;
+            vendasPorDia[d] = dataManager.calcularTotalVendidoDiaLocal(dKey);
+        }
+    } else {
+        vendasHist.forEach(v => {
+            if (!v.data) return;
+            const ts = typeof dataManager.parseDataSafe === 'function' ? dataManager.parseDataSafe(v.data) : 0;
+            const dStr = ts > 0 && typeof dataManager.hojeLocal === 'function' ? dataManager.hojeLocal(new Date(ts)) : (v.data || '').substring(0, 10);
+            if (dStr.startsWith(prefixoMes)) {
+                const diaNum = parseInt(dStr.split('-')[2], 10);
+                if (diaNum >= 1 && diaNum <= diasNoMes) {
+                    const val = parseFloat(v.valorVenda || v.valorBruto || v.liquido || v.valor || 0);
+                    if (val > 0 && val < 50000) vendasPorDia[diaNum] += val;
                 }
             }
-        }
-    });
-
-    // 2. Fallback: se nÃ£o houver vendas no histÃ³rico mas houver movimentaÃ§Ãµes reais de venda
-    if (!encontrouVendas) {
+        });
         movs.forEach(m => {
             if (!m.data) return;
             const ts = typeof dataManager.parseDataSafe === 'function' ? dataManager.parseDataSafe(m.data) : 0;
             const dStr = ts > 0 && typeof dataManager.hojeLocal === 'function' ? dataManager.hojeLocal(new Date(ts)) : (m.data || '').substring(0, 10);
             if (dStr.startsWith(prefixoMes)) {
-                const ehVendaReal = typeof dataManager.isMovimentacaoVendaReal === 'function' 
-                    ? dataManager.isMovimentacaoVendaReal(m) 
+                const ehVendaReal = typeof dataManager.isMovimentacaoVendaReal === 'function'
+                    ? dataManager.isMovimentacaoVendaReal(m)
                     : (m.tipo === 'venda' || m.tipo === 'entrada');
                 if (ehVendaReal) {
                     const diaNum = parseInt(dStr.split('-')[2], 10);
-                    if (diaNum >= 1 && diaNum <= diasNoMes) {
+                    if (diaNum >= 1 && diaNum <= diasNoMes && vendasPorDia[diaNum] === 0) {
                         const val = parseFloat(m.valor || m.valorVenda || 0);
-                        if (val > 0 && val < 50000) {
-                            vendasPorDia[diaNum] += val;
-                            encontrouVendas = true;
-                        }
+                        if (val > 0 && val < 50000) vendasPorDia[diaNum] += val;
                     }
                 }
             }
         });
-    }
-
-    if (!encontrouVendas && totalVendasMes > 0) {
-        const acumuladoPorDia = totalVendasMes / Math.max(1, diaAtual);
-        for (let d = 1; d <= diaAtual; d++) {
-            vendasPorDia[d] = Math.round(acumuladoPorDia * (0.8 + (d % 3) * 0.2) * 100) / 100;
-        }
     }
 
     const valores = Object.values(vendasPorDia);
@@ -547,7 +564,9 @@ UI._renderGraficoVendedorDiario = function (container, diasNoMes, diaAtual, tota
 };
 
 UI._enviarRelatorioVendedorWhatsApp = function () {
-    const totalVendasMes = dataManager.data.comissaoIlannaMensal || 0;
+    const totalVendasMes = (dataManager && typeof dataManager.calcularComissaoIlannaReal === 'function')
+        ? dataManager.calcularComissaoIlannaReal()
+        : (dataManager.data.comissaoIlannaMensal || 0);
     const meta = 7000;
     const percentual = Math.min(100, (totalVendasMes / meta) * 100);
     const excedente = Math.max(0, totalVendasMes - meta);
@@ -2012,6 +2031,12 @@ UI._vendedorFormNovaEncomenda = function (cliente) {
                 </div>
             </div>
             
+            <label class="form-label" style="font-size:16px;margin-top:12px;color:#FFD700">Forma de Pagamento da Entrada:</label>
+            <select class="form-input" id="enc-forma" style="font-size:16px;padding:10px">
+                <option value="dinheiro">💵 Dinheiro (Gaveta / Balcão)</option>
+                <option value="pix">🏦 PIX / Cartão (Caixa Principal)</option>
+            </select>
+
             <label class="form-label" style="font-size:16px;margin-top:12px;color:var(--text-muted)">Observação / Fornecedor (opcional):</label>
             <input class="form-input" id="enc-obs" placeholder="Ex: Pedido com fornecedor João" style="font-size:16px;padding:10px">
         </div>
@@ -2027,6 +2052,7 @@ UI._salvarEncomenda = function (nomeCliente, foneCliente) {
     const prod = document.getElementById('enc-prod')?.value?.trim();
     const valor = parseFloat(document.getElementById('enc-valor')?.value || 0);
     const entrada = parseFloat(document.getElementById('enc-entrada')?.value || 0);
+    const forma = document.getElementById('enc-forma')?.value || 'dinheiro';
     const obs = document.getElementById('enc-obs')?.value?.trim();
 
     if (!prod) return UI.toast('Digite o produto da encomenda', 'error');
@@ -2039,6 +2065,7 @@ UI._salvarEncomenda = function (nomeCliente, foneCliente) {
         produto: prod,
         valorTotal: valor,
         entrada: entrada,
+        formaPagamento: forma,
         obs: obs,
         status: 'pendente',
         data: new Date().toISOString()
@@ -2046,9 +2073,15 @@ UI._salvarEncomenda = function (nomeCliente, foneCliente) {
 
     if (!dataManager.isModoTreino()) {
         dataManager.data.encomendas.push(novaEnc);
-        if (entrada > 0) {
-            dataManager.data.financeiro.caixaPrincipal += entrada;
-            dataManager.data.financeiro.caixaSecundario += entrada;
+        if (entrada > 0 && typeof dataManager._registrarSincronizacaoFinanceira === 'function') {
+            dataManager._registrarSincronizacaoFinanceira({
+                tipo: forma === 'dinheiro' ? 'encomenda_dinheiro' : 'encomenda_pix',
+                produto: 'Sinal Encomenda: ' + prod,
+                valorVenda: entrada,
+                custo: 0,
+                caixaDestino: forma === 'dinheiro' ? 'caixaSecundario' : 'caixaPrincipal',
+                cliente: nomeCliente
+            });
         }
         dataManager.saveData();
     }

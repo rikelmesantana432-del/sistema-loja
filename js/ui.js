@@ -265,12 +265,17 @@ const UI = {
             <div class="hero-section" style="padding: 24px 16px;">
                 <div style="display:flex; justify-content:center; gap:24px; align-items:center; flex-wrap:wrap;">
                     <div style="text-align:center;">
-                        <div class="hero-value" style="font-size:36px; color:var(--accent-purple);">${this.R(f.caixaSecundario || 0)}</div>
+                        <div class="hero-value" style="font-size:32px; color:#10b981;">${this.R(f.caixaPrincipal || 0)}</div>
+                        <div class="hero-label" style="font-size:12px; color:#10b981;">Caixa Principal (PIX/Cartão)</div>
+                    </div>
+                    <div style="width:1px; height:45px; background:rgba(255,255,255,0.15)"></div>
+                    <div style="text-align:center;">
+                        <div class="hero-value" style="font-size:32px; color:var(--accent-purple);">${this.R(f.caixaSecundario || 0)}</div>
                         <div class="hero-label" style="font-size:12px; color:var(--accent-purple);">Caixa Balcão / Gaveta</div>
                     </div>
                     <div style="width:1px; height:45px; background:rgba(255,255,255,0.15)"></div>
                     <div style="text-align:center;">
-                        <div class="hero-value" style="font-size:36px; color:#f97316;">${this.R(f.caixaFogos || 0)}</div>
+                        <div class="hero-value" style="font-size:32px; color:#f97316;">${this.R(f.caixaFogos || 0)}</div>
                         <div class="hero-label" style="font-size:12px; color:#f97316;">Caixa de Fogos</div>
                     </div>
                 </div>

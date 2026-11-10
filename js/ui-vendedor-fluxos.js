@@ -678,19 +678,27 @@ UI._trocaEscolherProduto = function (cliente) {
 
 // Buscar preço de referência com fuzzy matching
 UI._buscarPrecoReferencia = function (modelo) {
+    if (typeof TrocaEngine !== 'undefined' && TrocaEngine.buscarAvaliacaoBase) {
+        const av = TrocaEngine.buscarAvaliacaoBase(modelo);
+        if (av && av.encontrado) {
+            return {
+                key: av.modeloKey + (av.capacidadeLabel ? ' ' + av.capacidadeLabel : ''),
+                valor: av.precoVitrine,
+                precoCaptacao: av.precoCaptacao,
+                fatorCaptacao: av.fatorCaptacao
+            };
+        }
+    }
     const tabela = dataManager.data.precosReferenciaUsados;
     if (!tabela) return null;
     const key = modelo.toLowerCase().trim();
-    // Match exato
-    if (tabela[key]) return { key, valor: tabela[key] };
-    // Match parcial
+    if (tabela[key]) return { key, valor: tabela[key], precoCaptacao: Math.round((tabela[key] * 0.58) / 10) * 10 };
     for (const [k, v] of Object.entries(tabela)) {
-        if (key.includes(k) || k.includes(key)) return { key: k, valor: v };
+        if (key.includes(k) || k.includes(key)) return { key: k, valor: v, precoCaptacao: Math.round((v * 0.58) / 10) * 10 };
     }
-    // Match sem espaço (ex: "iphone11" -> "iphone 11")
     const keyNoSpace = key.replace(/\s+/g, '');
     for (const [k, v] of Object.entries(tabela)) {
-        if (keyNoSpace.includes(k.replace(/\s+/g, '')) || k.replace(/\s+/g, '').includes(keyNoSpace)) return { key: k, valor: v };
+        if (keyNoSpace.includes(k.replace(/\s+/g, '')) || k.replace(/\s+/g, '').includes(keyNoSpace)) return { key: k, valor: v, precoCaptacao: Math.round((v * 0.58) / 10) * 10 };
     }
     return null;
 };
@@ -808,10 +816,11 @@ UI._trocaCheckModelo = function () {
     if (modelo.length < 3) { status.innerHTML = 'Digite o modelo acima...'; status.style.color = 'var(--text-muted)'; return; }
     const ref = UI._buscarPrecoReferencia(modelo);
     if (ref) {
-        status.innerHTML = `✅ <strong>${ref.key.toUpperCase()}</strong> encontrado! Valor de referência (perfeito): <strong style="color:var(--accent-green)">${UI.R(ref.valor)}</strong>`;
+        const cap = ref.precoCaptacao || Math.round((ref.valor * 0.58) / 10) * 10;
+        status.innerHTML = `✅ <strong>${ref.key.toUpperCase()}</strong> encontrado! 🏷️ Vitrine/Anúncio: <strong style="color:var(--text-secondary)">${UI.R(ref.valor)}</strong> | 🎯 Teto Captação na Troca: <strong style="color:var(--accent-green)">${UI.R(cap)}</strong>`;
         status.style.color = 'var(--accent-green)';
     } else {
-        status.innerHTML = `💡 Modelo customizado <strong>${modelo.toUpperCase()}</strong> será avaliado com valor de mercado estimado (R$ 800). Você também pode informar o valor manual abaixo.`;
+        status.innerHTML = `💡 Modelo customizado <strong>${modelo.toUpperCase()}</strong> será avaliado com teto base de captação (R$ 440). Você também pode informar o valor manual abaixo.`;
         status.style.color = 'var(--accent-cyan)';
     }
 };

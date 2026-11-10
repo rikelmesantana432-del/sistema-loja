@@ -170,41 +170,41 @@ UI._renderGraficoVendas = function (containerEl, dias = 7) {
     if (!containerEl) return;
     const vendas = (dataManager.data.historico && dataManager.data.historico.vendas) || [];
     const movs = dataManager.data.movimentacoesCaixa || [];
-    const hoje = new Date();
+    const hojeYMD = (typeof dataManager.hojeLocal === 'function')
+        ? dataManager.hojeLocal()
+        : new Date().toISOString().substring(0, 10);
+    const hojeAnchor = new Date(hojeYMD + 'T12:00:00');
     const diasData = [];
 
     for (let i = dias - 1; i >= 0; i--) {
-        const d = new Date(hoje);
-        d.setDate(d.getDate() - i);
-        const ano = d.getFullYear();
-        const mes = String(d.getMonth() + 1).padStart(2, '0');
-        const dia = String(d.getDate()).padStart(2, '0');
-        const key = `${ano}-${mes}-${dia}`;
+        const d = new Date(hojeAnchor.getTime() - (i * 86400000));
+        const key = (typeof dataManager.hojeLocal === 'function')
+            ? dataManager.hojeLocal(d)
+            : d.toISOString().substring(0, 10);
         const label = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][d.getDay()];
-        
-        let total = vendas.filter(v => {
-            const ts = typeof dataManager.parseDataSafe === 'function' ? dataManager.parseDataSafe(v.data) : 0;
-            const dStr = ts > 0 && typeof dataManager.hojeLocal === 'function' ? dataManager.hojeLocal(new Date(ts)) : (v.data || '').substring(0, 10);
-            return dStr === key;
-        }).reduce((s, v) => {
-            const val = parseFloat(v.valorVenda) || parseFloat(v.valorBruto) || parseFloat(v.liquido) || 0;
-            return s + (val > 0 && val < 50000 ? val : 0);
-        }, 0);
 
-        if (total === 0) {
-            total = movs.filter(m => {
-                const ts = typeof dataManager.parseDataSafe === 'function' ? dataManager.parseDataSafe(m.data) : 0;
-                const dStr = ts > 0 && typeof dataManager.hojeLocal === 'function' ? dataManager.hojeLocal(new Date(ts)) : (m.data || '').substring(0, 10);
-                if (dStr !== key) return false;
-                if (typeof dataManager.isMovimentacaoVendaReal === 'function') {
-                    return dataManager.isMovimentacaoVendaReal(m);
-                }
-                const tp = String(m.tipo || '').toLowerCase();
-                return tp === 'venda' || tp === 'entrada';
-            }).reduce((s, m) => {
-                const val = parseFloat(m.valor || 0);
+        let total = 0;
+        if (typeof dataManager.calcularTotalVendidoDiaLocal === 'function') {
+            total = dataManager.calcularTotalVendidoDiaLocal(key);
+        } else {
+            total = vendas.filter(v => {
+                const ts = typeof dataManager.parseDataSafe === 'function' ? dataManager.parseDataSafe(v.data) : 0;
+                const dStr = ts > 0 && typeof dataManager.hojeLocal === 'function' ? dataManager.hojeLocal(new Date(ts)) : (v.data || '').substring(0, 10);
+                return dStr === key;
+            }).reduce((s, v) => {
+                const val = parseFloat(v.valorVenda || v.valorBruto || v.liquido || v.valor || v.valorTotal || 0);
                 return s + (val > 0 && val < 50000 ? val : 0);
             }, 0);
+            if (total === 0) {
+                total = movs.filter(m => {
+                    const ts = typeof dataManager.parseDataSafe === 'function' ? dataManager.parseDataSafe(m.data) : 0;
+                    const dStr = ts > 0 && typeof dataManager.hojeLocal === 'function' ? dataManager.hojeLocal(new Date(ts)) : (m.data || '').substring(0, 10);
+                    if (dStr !== key) return false;
+                    return typeof dataManager.isMovimentacaoVendaReal === 'function'
+                        ? dataManager.isMovimentacaoVendaReal(m)
+                        : (String(m.tipo || '').toLowerCase() === 'venda' || String(m.tipo || '').toLowerCase() === 'entrada');
+                }).reduce((s, m) => s + (parseFloat(m.valor || 0) > 0 && parseFloat(m.valor || 0) < 50000 ? parseFloat(m.valor || 0) : 0), 0);
+            }
         }
 
         diasData.push({ key, label, total: Math.min(total, 50000) });

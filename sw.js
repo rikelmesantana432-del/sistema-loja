@@ -1,5 +1,5 @@
-// StrategyOS PWA Service Worker v10.8.0-mobile
-const CACHE_NAME = 'strategyos-v10.9.0-mobile';
+// StrategyOS PWA Service Worker v10.11.0-mobile
+const CACHE_NAME = 'strategyos-v10.11.0-mobile';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -24,6 +24,7 @@ const ASSETS_TO_CACHE = [
   './js/ui-fiado.js',
   './js/ui-caixa.js',
   './js/ui-ia-sugestoes.js',
+  './js/ui-ia-recaptura.js',
   './js/ui-fidelidade.js',
   './js/ui-estoque.js',
   './js/peliculaiq.js',
@@ -59,7 +60,7 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
+  if (event.request.method !== 'GET' || event.request.url.includes('/api/')) return;
   event.respondWith(
     fetch(event.request)
       .then((networkResponse) => {

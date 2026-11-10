@@ -1,206 +1,306 @@
 // ====================================
-// STRATEGYOS 2.0 - AVALIADOR DE TROCAS v3
-// Banco de preços + Inteligência contextual
+// STRATEGYOS 3.1 - MOTOR DE AVALIAÇÃO DE TROCAS (TRADE-IN ENGINE v4.0)
+// Precificação de Captação (Compra pela Loja) vs Vitrine (Anúncio) + Custo Real de Reparo
 // ====================================
 
 const TrocaEngine = {
-    // === BANCO DE PREÇOS INICIAIS ===
-    precosIniciais: {
-        'iphone 11 64gb': 2200, 'iphone 11 128gb': 2500,
-        'iphone 12 64gb': 2600, 'iphone 12 128gb': 2900,
-        'iphone 13 128gb': 3500, 'iphone 13 256gb': 3900,
-        'iphone 14 128gb': 4500, 'iphone 8 64gb': 900,
-        'iphone 8 plus 64gb': 1100, 'iphone x 64gb': 1500,
-        'iphone xs 64gb': 1700, 'iphone xr 64gb': 1600,
-        'samsung a54 128gb': 1600, 'samsung a54 256gb': 1800,
-        'samsung a34 128gb': 1300, 'samsung a14 128gb': 900,
-        'samsung a24 128gb': 1100, 'samsung s21 128gb': 2200,
-        'samsung s22 128gb': 2800, 'samsung s23 128gb': 3400,
-        'xiaomi redmi note 10': 900, 'xiaomi redmi note 11': 1100,
-        'xiaomi redmi note 12': 1300, 'xiaomi redmi 9': 600,
-        'xiaomi redmi 9a': 500, 'xiaomi poco x5': 1500,
-        'xiaomi poco f5': 2000, 'motorola moto g10': 550,
-        'motorola moto g20': 700, 'motorola moto g30': 800,
+    // TABELA DE PREÇOS DE VITRINE / ANÚNCIO (SEMINOVO PERFEITO)
+    // O valor de CAPTAÇÃO (quanto a loja paga na troca) aplica automaticamente o fator de margem da loja (~50% a 62% da vitrine).
+    precosVitrineSeminovo: {
+        'iphone 7': 450, 'iphone 7 plus': 580, 'iphone 8': 580, 'iphone 8 plus': 750,
+        'iphone se 2020': 680, 'iphone se 2022': 1050,
+        'iphone x': 800, 'iphone xr': 900, 'iphone xs': 950, 'iphone xs max': 1100,
+        'iphone 11': 1250, 'iphone 11 pro': 1550, 'iphone 11 pro max': 1750,
+        'iphone 12 mini': 1050, 'iphone 12': 1350, 'iphone 12 pro': 1700, 'iphone 12 pro max': 2100,
+        'iphone 13 mini': 1400, 'iphone 13': 1890, 'iphone 13 pro': 2390, 'iphone 13 pro max': 2800,
+        'iphone 14': 2450, 'iphone 14 plus': 2700, 'iphone 14 pro': 3200, 'iphone 14 pro max': 3800,
+        'iphone 15': 3300, 'iphone 15 plus': 3650, 'iphone 15 pro': 4300, 'iphone 15 pro max': 5000,
+        'iphone 16': 4700, 'iphone 16 plus': 5200, 'iphone 16 pro': 5900, 'iphone 16 pro max': 6800,
+        'samsung a04': 420, 'samsung a05': 500, 'samsung a10': 350, 'samsung a10s': 360,
+        'samsung a12': 480, 'samsung a13': 550, 'samsung a14': 650, 'samsung a15': 780,
+        'samsung a20': 400, 'samsung a21s': 480, 'samsung a22': 550, 'samsung a23': 650, 'samsung a24': 750, 'samsung a25': 900,
+        'samsung a30': 420, 'samsung a31': 500, 'samsung a32': 580, 'samsung a33': 700, 'samsung a34': 880, 'samsung a35': 1050,
+        'samsung a50': 480, 'samsung a51': 580, 'samsung a52': 700, 'samsung a53': 850, 'samsung a54': 1100, 'samsung a55': 1350,
+        'samsung s20 fe': 850, 'samsung s21': 1150, 'samsung s21 fe': 1000, 'samsung s21 ultra': 1650,
+        'samsung s22': 1500, 'samsung s22 ultra': 2200, 'samsung s23': 2100, 'samsung s23 fe': 1650, 'samsung s23 ultra': 3100,
+        'samsung s24': 2700, 'samsung s24 ultra': 4100,
+        'redmi 9': 400, 'redmi 9a': 320, 'redmi 9c': 350, 'redmi 10': 480, 'redmi 10c': 450,
+        'redmi 12': 650, 'redmi 12c': 520, 'redmi 13': 780, 'redmi 13c': 650, 'redmi 15c': 950, 'redmi 15': 1150,
+        'redmi note 8': 420, 'redmi note 9': 480, 'redmi note 10': 580, 'redmi note 10s': 620,
+        'redmi note 11': 680, 'redmi note 11s': 720, 'redmi note 12': 780, 'redmi note 12 pro': 980,
+        'redmi note 13': 920, 'redmi note 13 pro': 1200,
+        'poco c55': 500, 'poco c65': 620, 'poco m5': 550, 'poco x4 pro': 800, 'poco x5': 880, 'poco x5 pro': 1050, 'poco x6': 1150, 'poco x6 pro': 1450,
+        'moto e7': 280, 'moto e13': 380, 'moto e22': 440,
+        'moto g8': 350, 'moto g9 play': 380, 'moto g10': 420, 'moto g20': 460, 'moto g22': 520, 'moto g23': 600, 'moto g24': 680,
+        'moto g30': 480, 'moto g31': 520, 'moto g32': 580, 'moto g34': 680, 'moto g52': 650, 'moto g53': 720, 'moto g54': 820, 'moto g84': 1050,
+        'realme c11': 350, 'realme c35': 520, 'realme c53': 650, 'realme c55': 720, 'realme c67': 820, 'realme c73': 980,
+        'realme 60x': 680, 'realme note 50': 550, 'realme note 70': 780,
+        'infinix smart 8': 450, 'infinix hot 30': 580, 'infinix note 30': 780
     },
 
-    reparos: {
-        'iphone_tela_8': 220, 'iphone_tela_x': 320, 'iphone_tela_11': 280,
-        'iphone_tela_12': 400, 'iphone_tela_13': 550, 'iphone_tela_14': 600,
-        'iphone_bateria': 120, 'iphone_camera': 200, 'iphone_botao': 150,
-        'samsung_a_tela_basico': 150, 'samsung_a_tela_medio': 200,
-        'samsung_a_tela_avancado': 280, 'samsung_a_bateria': 80,
-        'samsung_s_tela_basico': 350, 'samsung_s_tela_avancado': 450,
-        'samsung_s_tela_topo': 550, 'samsung_s_bateria': 100,
-        'xiaomi_tela_basico': 130, 'xiaomi_tela_avancado': 250,
-        'xiaomi_tela_poco': 150, 'xiaomi_bateria': 70,
-        'generico_tela': 180, 'generico_bateria': 90, 'generico_camera': 150
+    init() {
+        this.carregarPrecos();
     },
 
-    descBateria(saude) {
-        if (saude >= 90) return 0;
-        if (saude >= 80) return 5;
-        if (saude >= 70) return 10;
-        if (saude >= 60) return 15;
-        if (saude >= 50) return 20;
-        return 25;
-    },
-    descMarcas: { nenhuma: 0, leves: 5, medias: 10, graves: 20 },
-    descAcessorios: { completo: 0, carregador: 3, caixa: 4, nada: 8 },
-    descDefeitos: {
-        tela_trincada_leve: 15, tela_trincada_grave: 25, tela_manchada: 30,
-        face_id: 15, touch_id: 10, camera_embacada: 10, camera_quebrada: 20,
-        botoes_travados: 12, nao_liga: 40, nao_pega_chip: 30,
-        alto_falante: 8, microfone: 8, bateria_viciada: 15, carcaca_danificada: 12
-    },
-    descPecasTrocadas: { tela: 10, bateria: 5, camera: 8 },
-    nomeDefeito: {
-        tela_trincada_leve: 'Tela trincada (leve)', tela_trincada_grave: 'Tela trincada (grave)',
-        tela_manchada: 'Tela manchada/queimada', face_id: 'Face ID não funciona',
-        touch_id: 'Touch ID não funciona', camera_embacada: 'Câmera embaçada',
-        camera_quebrada: 'Câmera quebrada', botoes_travados: 'Botões travados',
-        nao_liga: 'Não liga', nao_pega_chip: 'Não pega chip/sinal',
-        alto_falante: 'Alto-falante', microfone: 'Microfone',
-        bateria_viciada: 'Bateria viciada', carcaca_danificada: 'Carcaça danificada'
+    carregarPrecos() {
+        try { localStorage.removeItem('strategyos_precos'); } catch (e) {}
     },
 
-    // Detectar se é iPhone e qual geração
-    isIphone(modelo) { return modelo.toLowerCase().includes('iphone'); },
+    fatorCaptacaoBase(precoVitrine) {
+        if (precoVitrine <= 500) return 0.50;
+        if (precoVitrine <= 1200) return 0.55;
+        if (precoVitrine <= 2500) return 0.58;
+        return 0.62;
+    },
+
+    normalizarModelo(raw) {
+        if (!raw) return { baseKey: '', gb: 128, teveGbExplicito: false };
+        const str = String(raw).toLowerCase().trim();
+        let gb = 128;
+        let teveGbExplicito = false;
+        const gbMatch = str.match(/\b(32|64|128|256|512|1024)\s*(gb)?\b/i) || (str.includes('1tb') ? [null, '1024'] : null);
+        if (gbMatch) {
+            gb = parseInt(gbMatch[1], 10);
+            teveGbExplicito = true;
+        }
+        const limpo = str
+            .replace(/\b(32|64|128|256|512|1024)\s*(gb)?\b/gi, '')
+            .replace(/\b1\s*tb\b/gi, '')
+            .replace(/\b(preto|branco|azul|verde|roxo|rosa|dourado|grafite|estelar|meia-noite|vermelho|amarelo|titânio|titanio|natural|prata|cinza)\b/gi, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+        return { baseKey: limpo, gb, teveGbExplicito };
+    },
+
+    ajusteMemoriaPct(modeloKey, gb) {
+        if (gb >= 512) return 0.10;
+        if (gb === 256) return 0.06;
+        if (gb === 64 && modeloKey.includes('iphone')) return -0.06;
+        if (gb === 32) return -0.10;
+        return 0;
+    },
+
+    // Tetos diretos calibrados (-R$ 300 aplicado do iPhone 12 ao 15 conforme diretriz da loja)
+    tetosCaptacaoDiretos: {
+        'iphone 12 mini': 480, 'iphone 12': 660, 'iphone 12 pro': 860, 'iphone 12 pro max': 1090,
+        'iphone 13 mini': 690, 'iphone 13': 970, 'iphone 13 pro': 1370, 'iphone 13 pro max': 1620,
+        'iphone 14': 1410, 'iphone 14 plus': 1560, 'iphone 14 pro': 1870, 'iphone 14 pro max': 2240,
+        'iphone 15': 1930, 'iphone 15 plus': 2150, 'iphone 15 pro': 2550, 'iphone 15 pro max': 2990
+    },
+
+    buscarAvaliacaoBase(modeloInput) {
+        const { baseKey, gb, teveGbExplicito } = this.normalizarModelo(modeloInput);
+        if (!baseKey) return null;
+
+        const estoque = (window.dataManager && typeof dataManager.getEstoqueCelulares === 'function')
+            ? dataManager.getEstoqueCelulares() : [];
+        const chavesOrdenadas = Object.keys(this.precosVitrineSeminovo).sort((a, b) => b.length - a.length);
+
+        let matchKey = null;
+        let precoVitrine = 0;
+        let fonte = 'tabela_loja';
+
+        for (const k of chavesOrdenadas) {
+            if (baseKey === k || baseKey.includes(k)) {
+                matchKey = k;
+                precoVitrine = this.precosVitrineSeminovo[k];
+                break;
+            }
+        }
+
+        if (!matchKey && window.dataManager && dataManager.data && dataManager.data.precosReferenciaUsados) {
+            const refTab = dataManager.data.precosReferenciaUsados;
+            const refKeys = Object.keys(refTab).sort((a, b) => b.length - a.length);
+            for (const rk of refKeys) {
+                if (baseKey === rk || baseKey.includes(rk)) {
+                    matchKey = rk;
+                    const valRef = refTab[rk];
+                    precoVitrine = valRef < 1000 ? Math.round(valRef * 1.25) : Math.round(valRef * 1.20);
+                    fonte = 'referencia_sistema';
+                    break;
+                }
+            }
+        }
+
+        const itemEstoque = estoque.find(p => {
+            const n = this.normalizarModelo(p.nome).baseKey;
+            return n && (n === baseKey || (matchKey && n === matchKey));
+        });
+        if (!matchKey && itemEstoque && itemEstoque.precoVenda > 0) {
+            precoVitrine = Math.round(itemEstoque.precoVenda);
+            fonte = 'estoque_atual';
+        }
+
+        if (!precoVitrine) return null;
+
+        const multGb = 1 + this.ajusteMemoriaPct(matchKey || baseKey, gb);
+        precoVitrine = Math.round((precoVitrine * multGb) / 10) * 10;
+
+        const fator = this.fatorCaptacaoBase(precoVitrine);
+        const tetoDireto = matchKey && this.tetosCaptacaoDiretos[matchKey]
+            ? Math.round((this.tetosCaptacaoDiretos[matchKey] * multGb) / 10) * 10
+            : null;
+        let precoCaptacao = tetoDireto || (Math.round((precoVitrine * fator) / 10) * 10);
+
+        if (!tetoDireto && itemEstoque && itemEstoque.custo > 300) {
+            const tetoAtacado = Math.round((itemEstoque.custo * 0.85) / 10) * 10;
+            if (precoCaptacao > tetoAtacado) precoCaptacao = tetoAtacado;
+        }
+
+        const modeloKey = matchKey || baseKey;
+        return {
+            encontrado: true,
+            key: modeloKey,
+            modeloKey,
+            gb,
+            capacidadeLabel: teveGbExplicito ? `${gb}GB` : '',
+            preco: precoVitrine,
+            precoVitrine,
+            precoCaptacao,
+            fatorCaptacao: fator,
+            fatorCaptacaoPct: Math.round(fator * 100),
+            fonte,
+            data: '2026'
+        };
+    },
+
+    buscarPreco(modelo) { return this.buscarAvaliacaoBase(modelo); },
+    salvarPreco() { this.carregarPrecos(); },
+    isIphone(modelo) { return String(modelo || '').toLowerCase().includes('iphone'); },
     temFaceId(modelo) {
-        const m = modelo.toLowerCase();
-        if (!m.includes('iphone')) return false;
-        const semFaceId = ['iphone 5', 'iphone 6', 'iphone 7', 'iphone 8', 'iphone se'];
-        return !semFaceId.some(s => m.includes(s));
-    },
-    isAndroid(modelo) {
-        const m = modelo.toLowerCase();
-        return m.includes('samsung') || m.includes('xiaomi') || m.includes('redmi') ||
-            m.includes('poco') || m.includes('motorola') || m.includes('moto') ||
-            m.includes('infinix') || m.includes('realme') || m.includes('lg');
+        const m = String(modelo || '').toLowerCase();
+        return m.includes('iphone') && !['iphone 5', 'iphone 6', 'iphone 7', 'iphone 8', 'iphone se'].some(s => m.includes(s));
     },
 
-    // === MEMÓRIA DE PREÇOS ===
-    salvarPreco(modelo, preco) {
-        const mem = JSON.parse(localStorage.getItem('strategyos_precos') || '{}');
-        mem[modelo.toLowerCase().trim()] = { preco, data: new Date().toISOString().split('T')[0] };
-        localStorage.setItem('strategyos_precos', JSON.stringify(mem));
+    estimarReparo(modelo, defeito) {
+        const { baseKey } = this.normalizarModelo(modelo);
+        const tabModelo = (window.dataManager && dataManager.data && dataManager.data.tabelaServicosModelo) || {};
+        const chaves = Object.keys(tabModelo).sort((a, b) => b.length - a.length);
+        let srv = null;
+        for (const k of chaves) {
+            if (baseKey === k || baseKey.includes(k)) { srv = tabModelo[k]; break; }
+        }
+        const d = String(defeito || '').toLowerCase();
+        if (d.includes('tela')) {
+            if (srv && srv.tela && srv.tela.p) return srv.tela.p + 50;
+            if (baseKey.includes('iphone 14') || baseKey.includes('iphone 15')) return 450;
+            if (baseKey.includes('iphone 13')) return 350;
+            if (baseKey.includes('iphone 12')) return 280;
+            if (baseKey.includes('iphone 11') || baseKey.includes('iphone xr')) return 190;
+            return 150;
+        }
+        if (d.includes('bateria') || d.includes('bat_')) {
+            if (srv && srv.bateria && srv.bateria.p) return srv.bateria.p + 35;
+            return baseKey.includes('iphone') ? 120 : 85;
+        }
+        if (d.includes('camera')) {
+            if (srv && srv.camera && srv.camera.p) return srv.camera.p + 40;
+            return baseKey.includes('iphone') ? 210 : 120;
+        }
+        if (d.includes('carga') || d.includes('conector')) {
+            if (srv && srv.conector && srv.conector.p) return srv.conector.p + 35;
+            return baseKey.includes('iphone') ? 110 : 75;
+        }
+        if (d.includes('carcaca') || d.includes('traseira')) return baseKey.includes('iphone') ? 190 : 110;
+        if (d.includes('audio') || d.includes('microfone') || d.includes('alto_falante')) return 95;
+        if (d.includes('botoes') || d.includes('botao')) return 90;
+        if (d.includes('faceid') || d.includes('face_id')) return 280;
+        return 100;
     },
-    buscarPreco(modelo) {
-        const key = modelo.toLowerCase().trim();
-        // Primeiro buscar na memória do usuário
-        const mem = JSON.parse(localStorage.getItem('strategyos_precos') || '{}');
-        if (mem[key]) return mem[key];
-        // Buscar no banco inicial
-        if (this.precosIniciais[key]) return { preco: this.precosIniciais[key], data: '18/02/2026', fonte: 'banco' };
-        // Buscar parcial
-        for (const k in this.precosIniciais) {
-            if (key.includes(k) || k.includes(key)) return { preco: this.precosIniciais[k], data: '18/02/2026', fonte: 'parcial' };
-        }
-        for (const k in mem) {
-            if (key.includes(k) || k.includes(key)) return { ...mem[k], fonte: 'parcial' };
-        }
-        return null;
+
+    descBateria(saude) { return saude >= 90 ? 0 : saude >= 80 ? 5 : saude >= 70 ? 12 : 18; },
+    descMarcas: { nenhuma: 0, leves: 6, medias: 14, graves: 24 },
+    descAcessorios: { completo: 0, carregador: 2, caixa: 3, nada: 5 },
+    descDefeitos: {
+        tela_trincada: 18, tela_trincada_leve: 15, tela_trincada_grave: 25, tela_manchada: 30,
+        face_id: 22, touch_id: 12, camera_embacada: 10, camera_quebrada: 18,
+        botoes_travados: 8, nao_liga: 50, nao_pega_chip: 35,
+        alto_falante: 8, microfone: 8, bateria_viciada: 12, bat_70_79: 12, carcaca_danificada: 14
+    },
+    descPecasTrocadas: { tela: 8, bateria: 4, camera: 6 },
+    nomeDefeito: {
+        tela_trincada: 'Tela trincada', tela_trincada_leve: 'Tela trincada (leve)', tela_trincada_grave: 'Tela trincada (grave)',
+        tela_manchada: 'Tela manchada/queimada', face_id: 'Face ID inativo',
+        touch_id: 'Biometria inativa', camera_embacada: 'Câmera embaçada',
+        camera_quebrada: 'Câmera quebrada', botoes_travados: 'Botões travados',
+        nao_liga: 'Não liga', nao_pega_chip: 'Sem sinal/chip',
+        alto_falante: 'Alto-falante ruim', microfone: 'Microfone ruim',
+        bateria_viciada: 'Bateria manutenção (<80%)', bat_70_79: 'Bateria <80%', carcaca_danificada: 'Carcaça/Traseira trincada'
+    },
+
+    validarDefeitos(defeitos) {
+        const d = [...(defeitos || [])];
+        if (d.includes('tela_trincada_grave') && d.includes('tela_trincada_leve')) d.splice(d.indexOf('tela_trincada_leve'), 1);
+        if (d.includes('tela_manchada') && d.includes('tela_trincada_leve')) d.splice(d.indexOf('tela_trincada_leve'), 1);
+        return d;
     },
 
     contarTrocasModelo(modelo) {
-        const h = dataManager.getHistorico();
+        const h = window.dataManager ? dataManager.getHistorico() : {};
         const agora = new Date();
         return (h.movimentacoes || []).filter(m =>
             m.tipo === 'troca' && m.modeloUsado &&
-            m.modeloUsado.toLowerCase().includes(modelo.toLowerCase()) &&
+            m.modeloUsado.toLowerCase().includes(String(modelo || '').toLowerCase()) &&
             (agora - new Date(m.data)) < 30 * 24 * 60 * 60 * 1000
         ).length;
     },
 
-    estimarReparo(modelo, defeito) {
-        const m = modelo.toLowerCase();
-        const isIp = m.includes('iphone');
-        const isSA = m.includes('samsung') && /a[1-7]/i.test(m);
-        const isSS = m.includes('samsung') && /s[1-2]/i.test(m);
-        const isXi = m.includes('xiaomi') || m.includes('redmi') || m.includes('poco');
-        if (defeito.includes('tela')) {
-            if (isIp) {
-                if (m.includes('14')) return this.reparos.iphone_tela_14;
-                if (m.includes('13')) return this.reparos.iphone_tela_13;
-                if (m.includes('12')) return this.reparos.iphone_tela_12;
-                if (m.includes('11')) return this.reparos.iphone_tela_11;
-                if (m.includes('x') || m.includes('xs')) return this.reparos.iphone_tela_x;
-                return this.reparos.iphone_tela_8;
-            }
-            if (isSA) return this.reparos.samsung_a_tela_medio;
-            if (isSS) return this.reparos.samsung_s_tela_avancado;
-            if (isXi) return m.includes('poco') ? this.reparos.xiaomi_tela_poco : this.reparos.xiaomi_tela_basico;
-            return this.reparos.generico_tela;
-        }
-        if (defeito.includes('bateria') || defeito === 'bateria_viciada') {
-            if (isIp) return this.reparos.iphone_bateria;
-            if (isSA) return this.reparos.samsung_a_bateria;
-            if (isSS) return this.reparos.samsung_s_bateria;
-            if (isXi) return this.reparos.xiaomi_bateria;
-            return this.reparos.generico_bateria;
-        }
-        if (defeito === 'camera_embacada') return 80;
-        if (defeito.includes('camera')) { return isIp ? this.reparos.iphone_camera : this.reparos.generico_camera; }
-        if (defeito === 'botoes_travados' && isIp) return this.reparos.iphone_botao;
-        if (defeito === 'face_id' || defeito === 'nao_liga') return 0;
-        return 100;
-    },
+    calcular(dadosOuModelo, defeitosArg, precoNovoArg, custoNovoArg) {
+        const dados = typeof dadosOuModelo === 'object' && dadosOuModelo !== null
+            ? dadosOuModelo
+            : { modelo: dadosOuModelo, defeitos: defeitosArg || [], precoNovo: precoNovoArg, custoNovo: custoNovoArg };
+        const { modelo, bateriaSaude = 85, marcasUso = 'leves', acessorios = 'nada', defeitos = [], pecasTrocadas = [], precoRef } = dados;
+        const avBase = this.buscarAvaliacaoBase(modelo);
+        const precoVitrine = precoRef && precoRef > 0 ? precoRef : (avBase ? avBase.precoVitrine : 1200);
+        const baseCaptacao = avBase && (!precoRef || precoRef === avBase.precoVitrine)
+            ? avBase.precoCaptacao
+            : Math.round((precoVitrine * this.fatorCaptacaoBase(precoVitrine)) / 10) * 10;
 
-    // Validar defeitos (tela trincada + manchada = só o pior)
-    validarDefeitos(defeitos) {
-        const d = [...defeitos];
-        if (d.includes('tela_trincada_grave') && d.includes('tela_trincada_leve')) {
-            d.splice(d.indexOf('tela_trincada_leve'), 1);
-        }
-        if (d.includes('tela_manchada') && d.includes('tela_trincada_leve')) {
-            d.splice(d.indexOf('tela_trincada_leve'), 1);
-        }
-        return d;
-    },
-
-    calcular(dados) {
-        const { modelo, bateriaSaude, marcasUso, acessorios, defeitos, pecasTrocadas, precoRef } = dados;
         const defeitosValidados = this.validarDefeitos(defeitos);
         let desvTotal = 0;
         const detalhes = [];
+
         const dBat = this.descBateria(bateriaSaude);
+        const custoBat = bateriaSaude < 80 ? this.estimarReparo(modelo, 'bateria') : 0;
         desvTotal += dBat;
-        detalhes.push({ item: `Bateria ${bateriaSaude}%`, desc: dBat, valor: precoRef * dBat / 100 });
+        detalhes.push({ item: `Bateria ${bateriaSaude}%`, desc: dBat, valor: Math.round(baseCaptacao * dBat / 100) + custoBat, reparo: custoBat });
+
         const dM = this.descMarcas[marcasUso] || 0;
         desvTotal += dM;
-        detalhes.push({ item: `Marcas: ${marcasUso}`, desc: dM, valor: precoRef * dM / 100 });
+        detalhes.push({ item: `Estética: ${marcasUso}`, desc: dM, valor: Math.round(baseCaptacao * dM / 100) });
+
         const dA = this.descAcessorios[acessorios] || 0;
         desvTotal += dA;
-        const nAc = { completo: 'Completo', carregador: 'Só carregador', caixa: 'Só caixa', nada: 'Sem caixa/carregador' };
-        detalhes.push({ item: nAc[acessorios] || acessorios, desc: dA, valor: precoRef * dA / 100 });
+        detalhes.push({ item: `Acessórios: ${acessorios}`, desc: dA, valor: Math.round(baseCaptacao * dA / 100) });
 
         const reparosDetalhes = [];
-        let custoReparo = 0;
+        let custoReparo = custoBat;
         defeitosValidados.forEach(d => {
             const desc = this.descDefeitos[d] || 0;
             desvTotal += desc;
             const custo = this.estimarReparo(modelo, d);
             custoReparo += custo;
-            reparosDetalhes.push({ defeito: d, nome: this.nomeDefeito[d] || d, desc, custo, obs: d === 'face_id' ? 'SEM REPARO viável' : '' });
-            detalhes.push({ item: this.nomeDefeito[d] || d, desc, valor: precoRef * desc / 100, reparo: custo, obs: d === 'face_id' ? 'SEM REPARO' : '' });
+            reparosDetalhes.push({ defeito: d, nome: this.nomeDefeito[d] || d, desc, custo, obs: d === 'face_id' ? 'Desvalorização severa' : '' });
+            detalhes.push({ item: this.nomeDefeito[d] || d, desc, valor: custo, reparo: custo, obs: d === 'face_id' ? 'SEM REPARO' : '' });
         });
+
         pecasTrocadas.forEach(p => {
             const desc = this.descPecasTrocadas[p] || 0;
             desvTotal += desc;
-            detalhes.push({ item: `Peça trocada: ${p}`, desc, valor: precoRef * desc / 100 });
+            detalhes.push({ item: `Peça paralela: ${p}`, desc, valor: Math.round(baseCaptacao * desc / 100) });
         });
 
         desvTotal = Math.min(85, desvTotal);
-        const valorJusto = Math.max(0, precoRef * (1 - desvTotal / 100));
-        const tVenda = valorJusto < 500 ? 10 : valorJusto < 1000 ? 20 : 35;
-        const tReparo = custoReparo > 300 ? 10 : custoReparo > 0 ? 5 : 0;
-        this.salvarPreco(modelo, precoRef);
+        const descEsteticoReais = Math.round(baseCaptacao * ((dBat + dM + dA) / 100));
+        const valorJusto = Math.max(50, Math.round((baseCaptacao - descEsteticoReais - custoReparo) / 10) * 10);
 
         return {
-            modelo, precoRef, desvTotal, detalhes, valorJusto, custoReparo, reparosDetalhes,
-            revendaSemReparo: valorJusto * 0.85,
-            revendaReparado: precoRef * 0.95,
-            tempoReparo: tReparo, tempoVendaSemReparo: Math.round(tVenda),
-            tempoVendaReparado: Math.round(tReparo + tVenda * 0.7)
+            modelo, precoRef: precoVitrine, baseCaptacao, desvTotal, detalhes,
+            valorJusto, custoReparo, custoReparoPecas: custoReparo, reparosDetalhes,
+            revendaSemReparo: Math.max(valorJusto + 150, Math.round(precoVitrine * 0.72)),
+            revendaReparado: precoVitrine,
+            tempoReparo: custoReparo > 0 ? 3 : 0,
+            tempoVendaSemReparo: 20, tempoVendaReparado: 12
         };
     },
 
@@ -209,33 +309,20 @@ const TrocaEngine = {
         const margemNovo = precoFinal - custoNovo;
         const margemNovoPct = custoNovo > 0 ? (margemNovo / custoNovo * 100) : 0;
         const prejuizoNovo = margemNovo < 0;
-        const lucroUsadoA = analise.revendaSemReparo;
+        const lucroUsadoA = Math.max(0, analise.revendaSemReparo - analise.valorJusto);
         const lucroTotalA = margemNovo + lucroUsadoA;
-        const lucroUsadoB = analise.revendaReparado - analise.custoReparo;
+        const lucroUsadoB = Math.max(0, analise.revendaReparado - analise.valorJusto - analise.custoReparo);
         const lucroTotalB = margemNovo + lucroUsadoB;
-        const cenarioMelhor = lucroTotalA >= lucroTotalB ? 'A' : 'B';
+        const cenarioMelhor = lucroTotalB >= lucroTotalA ? 'B' : 'A';
         const melhorLucro = Math.max(lucroTotalA, lucroTotalB);
-
-        let recomendacao, motivo;
-        if (melhorLucro < custoNovo * 0.15) {
-            recomendacao = 'recusar'; motivo = 'Margem total muito baixa.';
-        } else if (melhorLucro < custoNovo * 0.25) {
-            recomendacao = 'cautela'; motivo = prejuizoNovo ? 'Lucro aceitável mas PREJUÍZO no produto novo. Reduza o desconto.' : 'Margem apertada.';
-        } else {
-            recomendacao = 'aceitar'; motivo = prejuizoNovo ? 'Boa margem total, mas cuidado: novo sai no prejuízo.' : 'Margem boa!';
-        }
-
         const melhorLucroUsado = Math.max(lucroUsadoA, lucroUsadoB);
-        const descontoMax = Math.max(0, (precoNovo - custoNovo) + melhorLucroUsado - (custoNovo * 0.30));
+        const recomendacao = melhorLucro < 200 ? 'recusar' : melhorLucro < 400 ? 'cautela' : 'aceitar';
+        const motivo = recomendacao === 'recusar' ? 'Margem combinada muito baixa.' : recomendacao === 'cautela' ? 'Margem moderada; evite dar desconto extra.' : 'Excelente margem combinada para a loja!';
+        const descontoMax = Math.max(0, Math.round(margemNovo * 0.35));
         const descontoOferta = Math.round(descontoMax * 0.5 / 10) * 10;
-
         const alertas = [];
-        if (prejuizoNovo) alertas.push({ tipo: 'vermelho', msg: `⚠️ PREJUÍZO no produto novo: ${UI.R(margemNovo)}` });
-        if (desconto > descontoMax) alertas.push({ tipo: 'amarelo', msg: `Desconto ${UI.R(desconto)} está ${UI.R(desconto - descontoMax)} acima do seguro` });
-        if ((desconto / precoNovo * 100) > 30) alertas.push({ tipo: 'vermelho', msg: '🚨 Desconto > 30%!' });
-        else if ((desconto / precoNovo * 100) > 20) alertas.push({ tipo: 'amarelo', msg: '⚠️ Desconto > 20%' });
-        const trocasRep = this.contarTrocasModelo(analise.modelo);
-        if (trocasRep >= 3) alertas.push({ tipo: 'amarelo', msg: `📊 ${trocasRep} trocas deste modelo em 30 dias` });
+        if (prejuizoNovo) alertas.push({ tipo: 'vermelho', msg: `⚠️ Prejuízo no aparelho da loja: ${UI.R(margemNovo)}` });
+        if (analise.custoReparo > 0) alertas.push({ tipo: 'amarelo', msg: `🔧 Custo estimado de reparo na assistência: ${UI.R(analise.custoReparo)} (já descontado da oferta)` });
 
         return {
             precoFinal, margemNovo, margemNovoPct, desconto, prejuizoNovo,
@@ -243,10 +330,11 @@ const TrocaEngine = {
             cenarioB: { lucroUsado: lucroUsadoB, lucroTotal: lucroTotalB, pct: custoNovo > 0 ? lucroTotalB / custoNovo * 100 : 0, revenda: analise.revendaReparado, custoReparo: analise.custoReparo, tempo: analise.tempoVendaReparado },
             recomendacao, cenarioMelhor, motivo, descontoMax, alertas, custoNovo, precoNovo,
             opcoes: {
-                atual: { desconto, preco: precoFinal, lucro: cenarioMelhor === 'A' ? lucroTotalA : lucroTotalB },
-                seguro: { desconto: Math.round(descontoMax), preco: precoNovo - Math.round(descontoMax), lucro: (precoNovo - Math.round(descontoMax) - custoNovo) + melhorLucroUsado },
+                atual: { desconto, preco: precoFinal, lucro: melhorLucro },
+                seguro: { desconto: descontoMax, preco: precoNovo - descontoMax, lucro: (precoNovo - descontoMax - custoNovo) + melhorLucroUsado },
                 oferta: { desconto: descontoOferta, preco: precoNovo - descontoOferta, lucro: (precoNovo - descontoOferta - custoNovo) + melhorLucroUsado }
             }
         };
     }
 };
+window.TrocaEngine = TrocaEngine;

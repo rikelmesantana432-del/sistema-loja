@@ -1,4 +1,4 @@
-﻿/**
+/**
  * TESTE DE VERIFICAÇÃO COMPLETA - STRATEGYOS 3.0
  * Executa simulação com sandbox isolado para validar regras de negócio,
  * caixas, comissão, precificação de conserto, fiado e fechamentos.
@@ -153,7 +153,11 @@ assert(fechSemanal.vendasSemana === 150, `Fechamento semanal total vendas: R$ ${
 assert(fechSemanal.custoSemana === 90, `Custo de reposição semanal: R$ ${fechSemanal.custoSemana}`);
 assert(fechSemanal.topVolume && fechSemanal.topVolume.nome === 'Película 3D', `Top volume identificado corretamente: ${fechSemanal.topVolume?.nome}`);
 
-// TESTE 8: Novo ciclo (dia 6) zera o Caixa Físico
+// TESTE 8: Novo ciclo (dia 6) zera o Caixa Físico de vendas do ciclo anterior (e preserva vendas feitas >= dia 6)
+dm.data.historico.vendas = [
+    { data: '2026-01-15T10:00:00', valor: 500, valorVenda: 500, lucro: 150, custo: 350, produto: 'Venda Ciclo Anterior' }
+];
+dm.data.movimentacoesCaixa = [];
 dm.data.ultimoCicloZerado = '2026-01-dia06';
 dm.data.financeiro.caixaSecundario = 500;
 dm.verificarViradaDeMes();

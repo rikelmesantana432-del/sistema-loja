@@ -149,4 +149,68 @@ if (typeof sandbox.UI._renderGraficoVendas === 'function') {
     process.exit(1);
 }
 
+console.log('\n=== TESTE 4: PAGAMENTO DIVIDIDO (MULTI) + RECONCILIAÇÃO SEM DUPLICAÇÃO ===');
+dm.data = dm.getDefaultData();
+dm.data.financeiro.caixaPrincipal = 0;
+dm.data.financeiro.caixaSecundario = 0;
+dm.data.estoqueAcessorios = [{ id: 777, nome: 'Cabo Turbo Teste', custo: 10, precoVenda: 50, quantidade: 3, status: 'disponivel' }];
+dm.venderCarrinho(
+    [{ id: 777, _tipo: 'acess', nome: 'Cabo Turbo Teste', precoVenda: 100, precoFinal: 100 }],
+    [
+        { forma: 'dinheiro', valor: 40, caixa: 'caixaSecundario' },
+        { forma: 'pix', valor: 60, caixa: 'caixaPrincipal' }
+    ],
+    'Cliente Multi Teste'
+);
+const qtdMovsAntes = dm.data.movimentacoesCaixa.length;
+const qtdVendasAntes = dm.data.historico.vendas.length;
+dm.reconciliarFinanceiroCicloAtual(dm.data);
+if (dm.data.movimentacoesCaixa.length !== qtdMovsAntes || dm.data.historico.vendas.length !== qtdVendasAntes) {
+    console.error('❌ [FALHOU] reconciliarFinanceiroCicloAtual duplicou venda multi!', dm.data.movimentacoesCaixa.length, qtdMovsAntes, dm.data.historico.vendas.length, qtdVendasAntes);
+    process.exit(1);
+}
+if (dm.data.financeiro.caixaSecundario !== 40 || dm.data.financeiro.caixaPrincipal !== 60) {
+    console.error('❌ [FALHOU] Saldos multi incorretos!', dm.data.financeiro);
+    process.exit(1);
+}
+console.log('✅ [PASSOU] Venda dividida PIX+Dinheiro reconciliou sem duplicar (Sec=40, Prin=60)!');
+
+console.log('\n=== TESTE 5: DUAS VENDAS IDÊNTICAS NO MESMO DIA + TOTAL DIÁRIO PARA GRÁFICOS ===');
+const hojeYMD = dm.hojeLocal();
+dm.data.movimentacoesCaixa.push({ id: 'man_1', data: hojeYMD + 'T09:00:00', tipo: 'entrada', motivo: 'Venda Manual', caixa: 'caixaSecundario', valor: 25, custo: 10 });
+dm.data.movimentacoesCaixa.push({ id: 'man_2', data: hojeYMD + 'T16:00:00', tipo: 'entrada', motivo: 'Venda Manual', caixa: 'caixaSecundario', valor: 25, custo: 10 });
+dm.reconciliarFinanceiroCicloAtual(dm.data);
+const totalHojeDia = dm.calcularTotalVendidoDiaLocal(hojeYMD);
+if (Math.abs(totalHojeDia - 150) > 0.01 || Math.abs(dm.data.financeiro.caixaSecundario - 90) > 0.01) {
+    console.error('❌ [FALHOU] Vendas manuais idênticas no mesmo dia não somaram corretamente:', totalHojeDia, dm.data.financeiro.caixaSecundario);
+    process.exit(1);
+}
+console.log('✅ [PASSOU] Duas vendas manuais idênticas (25+25) + venda multi (100) somaram exatos R$ 150 no gráfico e R$ 90 na gaveta!');
+
+console.log('\n=== TESTE 6: UI._estoqueVender SEM BAIXA DUPLA & IARecaptura NO VENDEDOR ===');
+vm.runInContext(fs.readFileSync('js/ui-estoque.js', 'utf8'), sandbox);
+vm.runInContext(fs.readFileSync('js/ui-ia-recaptura.js', 'utf8'), sandbox);
+dm.data.estoqueAcessorios = [{ id: 'ac_99', nome: 'Capa Silicone', custo: 8, precoVenda: 35, quantidade: 5, status: 'disponivel' }];
+dm.data.estoqueCelulares = [{ id: 'cel_99', nome: 'iPhone Teste', custo: 1500, precoVenda: 2200, quantidade: 1, status: 'disponivel' }];
+sandbox.UI.renderEstoque = () => {};
+sandbox.UI.render = () => {};
+sandbox.UI._estoqueVender('ac_99', 'acess');
+if (dm.data.estoqueAcessorios[0].quantidade !== 4) {
+    console.error('❌ [FALHOU] Baixa de acessório incorreta:', dm.data.estoqueAcessorios[0].quantidade);
+    process.exit(1);
+}
+sandbox.UI._estoqueVender('cel_99', 'celular');
+if (dm.data.estoqueCelulares[0].quantidade !== 0 || dm.data.estoqueCelulares[0].status !== 'vendido') {
+    console.error('❌ [FALHOU] Celular vendido pelo estoque não zerou/marcou vendido:', dm.data.estoqueCelulares[0]);
+    process.exit(1);
+}
+dm.data.clientes = [{ nome: 'Maria Silva', telefone: '75999112233', historico: [{ data: '2026-10-15', produto: 'iPhone 11', valor: 1900 }] }];
+const htmlRecap = sandbox.IARecaptura.renderPainelRecaptura();
+if (!htmlRecap.includes('IARecaptura.trocarEtapa') || !htmlRecap.includes('https://chat.whatsapp.com/FcuY7wDt7u3F1LusMdlko9')) {
+    console.error('❌ [FALHOU] IARecaptura sem trocarEtapa ou link do grupo VIP!');
+    process.exit(1);
+}
+console.log('✅ [PASSOU] UI._estoqueVender (1x baixa) e IARecaptura validados com sucesso!');
+
 console.log('\n=== TODOS OS TESTES ESPECÍFICOS DE GRÁFICO, FECHAMENTO E SYNC PASSARAM COM SUCESSO! ===');
+setTimeout(() => process.exit(0), 50);

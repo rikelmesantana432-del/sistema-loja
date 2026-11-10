@@ -10,12 +10,325 @@ const DIA_ZERAMENTO_CICLO = 6;
 class DataManager {
     constructor() {
         this.storageKey = 'strategyos_v3';
+        this._booting = true;
         this.data = this.loadData();
         this.verificarViradaDeMes();
         this.verificarFechamentoDiarioAutomatico();
         this.verificarZeramentoSegunda();
+        this.reconciliarFinanceiroCicloAtual(this.data);
+        this._booting = false;
         this.supabase = null;
         this.initCloudRedundancy();
+    }
+
+    _gerarIdUnico(prefixo = 'id') {
+        return `${prefixo}_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+    }
+
+    _getOSNumero(texto) {
+        const m = String(texto || '').match(/OS\s*#0*(\d+)/i);
+        return m ? m[1] : '';
+    }
+
+    _extrairDataYMD(dataVal) {
+        if (!dataVal) return '';
+        const ts = typeof this.parseDataSafe === 'function' ? this.parseDataSafe(dataVal) : 0;
+        if (ts > 0) return this.hojeLocal(new Date(ts));
+        const s = String(dataVal).trim();
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.substring(0, 10);
+        return '';
+    }
+
+    _inicioCicloPorChave(cicloId, fallbackYMD = '') {
+        const m = String(cicloId || '').match(/^(\d{4}-\d{2})-dia(\d{2})$/);
+        if (m) return `${m[1]}-${m[2]}`;
+        return fallbackYMD || this.hojeLocal();
+    }
+
+    _parearVendasMovsDia(vendasDia, movsDia) {
+        const poolMovs = (movsDia || []).map(m => ({
+            m,
+            val: Math.abs(parseFloat(m.valor || m.valorVenda || 0)),
+            tp: String(m.tipo || '').toLowerCase(),
+            caixa: m.caixa || m.caixaDestino || 'caixaSecundario',
+            osNum: this._getOSNumero(m.descricao || m.motivo || m.produto),
+            used: false
+        }));
+
+        const faltantesNoCaixa = [];
+
+        (vendasDia || []).forEach(v => {
+            if (!v) return;
+            const tp = String(v.tipo || '').toLowerCase();
+            const osNum = this._getOSNumero(v.produto);
+
+            if (tp === 'multi' && Array.isArray(v.pagamentoDivisao) && v.pagamentoDivisao.length > 0) {
+                v.pagamentoDivisao.forEach(pag => {
+                    const valPag = Math.abs(parseFloat(pag.valor || 0));
+                    if (valPag <= 0 || valPag >= 50000) return;
+                    const caixaPag = pag.caixa || v.caixaDestino || 'caixaSecundario';
+                    let matchIdx = poolMovs.findIndex(mv => !mv.used && mv.tp === 'venda_multi' && mv.caixa === caixaPag && Math.abs(mv.val - valPag) < 0.05);
+                    if (matchIdx === -1) {
+                        matchIdx = poolMovs.findIndex(mv => !mv.used && Math.abs(mv.val - valPag) < 0.05);
+                    }
+                    if (matchIdx !== -1) {
+                        poolMovs[matchIdx].used = true;
+                    } else {
+                        faltantesNoCaixa.push({ v, valPag, caixaPag, osNum });
+                    }
+                });
+                return;
+            }
+
+            if (osNum) {
+                const matchedOS = poolMovs.filter(mv => !mv.used && mv.osNum === osNum);
+                if (matchedOS.length > 0) {
+                    matchedOS.forEach(mv => { mv.used = true; });
+                    return;
+                }
+            }
+
+            const expectedCashVal = tp === 'crediario'
+                ? Math.abs(parseFloat(v.entrada || 0))
+                : Math.abs(parseFloat(v.valorVenda || v.liquido || v.valorBruto || v.valor || v.valorTotal || 0));
+
+            if (expectedCashVal <= 0 || expectedCashVal >= 50000) return;
+
+            const matchIdx = poolMovs.findIndex(mv => !mv.used && Math.abs(mv.val - expectedCashVal) < 0.05);
+            if (matchIdx !== -1) {
+                poolMovs[matchIdx].used = true;
+            } else {
+                const cxDest = tp === 'crediario'
+                    ? 'caixaSecundario'
+                    : (v.caixaDestino || v.caixa || ((tp === 'pix' || tp === 'parcelado_maquina' || tp.includes('cartao')) ? 'caixaPrincipal' : 'caixaSecundario'));
+                faltantesNoCaixa.push({ v, valPag: expectedCashVal, caixaPag: cxDest, osNum });
+            }
+        });
+
+        const movsSemPar = poolMovs.filter(mv => !mv.used);
+        return { faltantesNoCaixa, movsSemPar };
+    }
+
+    calcularTotalVendidoDiaLocal(dataYMD = null) {
+        if (!this.data) return 0;
+        const alvo = dataYMD || this.hojeLocal();
+        const vendasDia = (this.data.historico?.vendas || []).filter(v => {
+            if (!v || !v.data) return false;
+            return this._extrairDataYMD(v.data) === alvo;
+        });
+        const movsDia = (this.data.movimentacoesCaixa || []).filter(m => {
+            if (!m || !m.data) return false;
+            return this._extrairDataYMD(m.data) === alvo && this.isMovimentacaoVendaReal(m);
+        });
+
+        let total = 0;
+        const osVendasTotal = new Set();
+        vendasDia.forEach(v => {
+            const val = parseFloat(v.valorVenda || v.liquido || v.valorBruto || v.valor || v.valorTotal || 0);
+            if (val > 0 && val < 50000) {
+                total += val;
+                const osNum = this._getOSNumero(v.produto);
+                if (osNum) osVendasTotal.add(osNum);
+            }
+        });
+
+        const { movsSemPar } = this._parearVendasMovsDia(vendasDia, movsDia);
+        movsSemPar.forEach(mv => {
+            if (mv.osNum && osVendasTotal.has(mv.osNum)) return;
+            if (mv.val > 0 && mv.val < 50000) total += mv.val;
+        });
+
+        return Math.min(Math.round(total * 100) / 100, 50000);
+    }
+
+    reconciliarFinanceiroCicloAtual(targetData = this.data) {
+        if (this._emLotePagamento) return;
+        try {
+            if (!targetData || typeof targetData !== 'object') return;
+            if (!targetData.financeiro) targetData.financeiro = {};
+            if (!targetData.historico) targetData.historico = { vendas: [], compras: [], movimentacoes: [] };
+            if (!Array.isArray(targetData.historico.vendas)) targetData.historico.vendas = [];
+            if (!Array.isArray(targetData.movimentacoesCaixa)) targetData.movimentacoesCaixa = [];
+
+            const hojeYMD = this.hojeLocal();
+            const cicloAtual = this._chaveCicloMensal(hojeYMD);
+            const inicioCicloPadrao = this._inicioCicloPorChave(cicloAtual, hojeYMD);
+            const isManualReset = String(targetData.ultimoZeramentoId || '').startsWith('manual_');
+
+            if (!isManualReset || !targetData.dataInicioCicloMeta) {
+                targetData.dataInicioCicloMeta = inicioCicloPadrao;
+            }
+            const inicioCiclo = targetData.dataInicioCicloMeta || inicioCicloPadrao;
+
+            const osNoHistoricoVendas = new Set();
+            const osNasMovsTodas = new Set();
+            targetData.movimentacoesCaixa.forEach(m => {
+                if (!m) return;
+                const osN = this._getOSNumero(m.descricao || m.motivo || m.produto);
+                if (osN) osNasMovsTodas.add(osN);
+            });
+
+            // 1. Normalizar vendas do histórico e agrupar vendas/movimentos do ciclo por dia (suporte multi-pagamento + multiplicidade)
+            const vendasPorDia = new Map();
+            targetData.historico.vendas.forEach(v => {
+                if (!v) return;
+                const valReal = parseFloat(v.valorVenda || v.liquido || v.valorBruto || v.valor || v.valorTotal || 0);
+                if (!v.valorVenda && valReal > 0) v.valorVenda = valReal;
+                const osN = this._getOSNumero(v.produto);
+                if (osN) osNoHistoricoVendas.add(osN);
+                const dYMD = this._extrairDataYMD(v.data);
+                if (dYMD >= inicioCiclo && v._cicloMetaFechado && !String(v._cicloMetaFechado).startsWith('manual_')) {
+                    delete v._cicloMetaFechado;
+                }
+                if (dYMD >= inicioCiclo) {
+                    if (!vendasPorDia.has(dYMD)) vendasPorDia.set(dYMD, []);
+                    vendasPorDia.get(dYMD).push(v);
+                }
+            });
+
+            const movsPorDia = new Map();
+            targetData.movimentacoesCaixa.forEach(m => {
+                if (!m || !this.isMovimentacaoVendaReal(m)) return;
+                const dYMD = this._extrairDataYMD(m.data);
+                if (dYMD >= inicioCiclo) {
+                    if (!movsPorDia.has(dYMD)) movsPorDia.set(dYMD, []);
+                    movsPorDia.get(dYMD).push(m);
+                }
+            });
+
+            const todasDatas = new Set([...vendasPorDia.keys(), ...movsPorDia.keys()]);
+            todasDatas.forEach(dYMD => {
+                const { faltantesNoCaixa, movsSemPar } = this._parearVendasMovsDia(vendasPorDia.get(dYMD), movsPorDia.get(dYMD));
+
+                // Injetar movimentação faltante no caixa apenas quando não houver par correspondente (incluindo parcelas faltantes de multi)
+                faltantesNoCaixa.forEach(({ v, valPag, caixaPag, osNum }) => {
+                    if (osNum && osNasMovsTodas.has(osNum)) return;
+                    const valorTotalVenda = parseFloat(v.valorVenda || v.liquido || v.valorBruto || v.valor || 0);
+                    const prop = valorTotalVenda > 0 ? Math.min(1, valPag / valorTotalVenda) : 1;
+                    const custoVal = Math.round(parseFloat(v.custo || 0) * prop * 100) / 100;
+                    const lucroVal = Math.max(0, Math.round((valPag - custoVal) * 100) / 100);
+                    const tp = String(v.tipo || 'venda').toLowerCase();
+                    targetData.movimentacoesCaixa.push({
+                        id: v.id ? `${v.id}_${caixaPag}` : this._gerarIdUnico('reconc'),
+                        data: v.data || new Date().toISOString(),
+                        tipo: tp === 'multi' ? 'venda_multi' : (v.tipo || 'venda'),
+                        caixa: caixaPag,
+                        valor: valPag,
+                        custo: custoVal,
+                        lucro: lucroVal,
+                        parteLoja: Math.round(lucroVal * 0.40 * 100) / 100,
+                        partePai: Math.round(lucroVal * 0.60 * 100) / 100,
+                        cliente: v.cliente || 'Cliente Loja',
+                        descricao: `VENDA: ${v.produto || 'Produto'} — R$ ${valPag.toFixed(2)}`
+                    });
+                });
+
+                // Espelhar movimentações reais de venda do ciclo que não estavam em historico.vendas (mantendo multiplicidade)
+                movsSemPar.forEach(({ m, val, osNum }) => {
+                    if (val <= 0 || val >= 50000) return;
+                    if (osNum && osNoHistoricoVendas.has(osNum)) return;
+                    const custoVal = parseFloat(m.custo || 0);
+                    targetData.historico.vendas.push({
+                        id: m.id || this._gerarIdUnico('mov'),
+                        data: m.data || new Date().toISOString(),
+                        produto: (m.descricao || m.motivo || 'Venda Registrada').replace(/^(VENDA_MULTI|VENDA|ENTRADA|OS_[A-Z]+):\s*/i, '').split(' — R$')[0],
+                        custo: custoVal,
+                        valorVenda: val,
+                        lucro: Math.max(0, val - custoVal),
+                        tipo: m.tipo || 'venda',
+                        caixaDestino: m.caixa || 'caixaSecundario',
+                        cliente: m.cliente || 'Cliente Loja'
+                    });
+                });
+            });
+
+            // 3. Reconciliar saldos de Caixa Secundário (Gaveta) e Caixa Principal a partir das movimentações reais do ciclo
+            let tsUltimoZeroGaveta = 0;
+            let tsUltimoZeroPrincipal = 0;
+            targetData.movimentacoesCaixa.forEach(m => {
+                if (!m) return;
+                const tp = String(m.tipo || '').toLowerCase();
+                const dYMD = this._extrairDataYMD(m.data);
+                if (dYMD < inicioCiclo) return;
+                const ts = this.parseDataSafe(m.data);
+                if (tp === 'zerado' || tp === 'zerado_manual') {
+                    if ((m.caixa === 'caixaSecundario' || m.caixa === 'todos') && ts > tsUltimoZeroGaveta) tsUltimoZeroGaveta = ts;
+                    if ((m.caixa === 'caixaPrincipal' || m.caixa === 'todos') && ts > tsUltimoZeroPrincipal) tsUltimoZeroPrincipal = ts;
+                }
+            });
+
+            let calcGaveta = 0;
+            let calcPrincipal = 0;
+            targetData.movimentacoesCaixa.forEach(m => {
+                if (!m) return;
+                const dYMD = this._extrairDataYMD(m.data);
+                if (dYMD < inicioCiclo) return;
+                const ts = this.parseDataSafe(m.data);
+                const tp = String(m.tipo || '').toLowerCase();
+                // Ignorar logs informativos que não mexem em dinheiro vivo
+                if (tp === 'estoque_cadastro' || tp === 'fechamento_diario_auto' || tp === 'virada_mes_auto' || tp === 'alteracao_sistema' || tp === 'zerado' || tp === 'zerado_manual') {
+                    return;
+                }
+                const val = parseFloat(m.valor || 0);
+                if (isNaN(val) || Math.abs(val) > 50000) return;
+                const cx = m.caixa || m.caixaDestino || 'caixaSecundario';
+
+                if (tp === 'transferencia') {
+                    const orig = m.caixaOrigem || m.caixa;
+                    const dest = m.caixaDestino;
+                    const vAbs = Math.abs(val);
+                    if (orig === 'caixaSecundario' && ts > tsUltimoZeroGaveta) calcGaveta -= vAbs;
+                    if (dest === 'caixaSecundario' && ts > tsUltimoZeroGaveta) calcGaveta += vAbs;
+                    if (orig === 'caixaPrincipal' && ts > tsUltimoZeroPrincipal) calcPrincipal -= vAbs;
+                    if (dest === 'caixaPrincipal' && ts > tsUltimoZeroPrincipal) calcPrincipal += vAbs;
+                    return;
+                }
+
+                if (cx === 'caixaSecundario' && ts > tsUltimoZeroGaveta) {
+                    if (tp === 'despesa' || tp === 'saida' || val < 0) calcGaveta -= Math.abs(val);
+                    else calcGaveta += val;
+                } else if (cx === 'caixaPrincipal' && ts > tsUltimoZeroPrincipal) {
+                    if (tp === 'despesa' || tp === 'saida' || val < 0) calcPrincipal -= Math.abs(val);
+                    else calcPrincipal += val;
+                }
+            });
+
+            calcGaveta = Math.max(0, Math.round(calcGaveta * 100) / 100);
+            calcPrincipal = Math.max(0, Math.round(calcPrincipal * 100) / 100);
+
+            if (calcGaveta > (parseFloat(targetData.financeiro.caixaSecundario) || 0)) {
+                targetData.financeiro.caixaSecundario = calcGaveta;
+            }
+            if (calcPrincipal > (parseFloat(targetData.financeiro.caixaPrincipal) || 0)) {
+                targetData.financeiro.caixaPrincipal = calcPrincipal;
+            }
+
+            // 4. Recalcular Meta / Comissão da loja no ciclo atual
+            let comissaoCiclo = 0;
+            targetData.historico.vendas.forEach(v => {
+                if (!v || v._cicloMetaFechado) return;
+                const dYMD = this._extrairDataYMD(v.data);
+                if (dYMD < inicioCiclo) return;
+                const prod = (v.produto || '').toLowerCase();
+                const tipo = (v.tipo || '').toLowerCase();
+                const isFogos = tipo === 'fogos' || prod.includes('fogo') || prod.includes('19x4') || prod.includes('12x1') || prod.includes('foguete');
+                if (isFogos) return;
+                const val = parseFloat(v.valorVenda || v.liquido || v.valorBruto || v.valor || v.valorTotal || 0);
+                if (val <= 0 || val > 50000) return;
+                const isCelular = tipo === 'celular' || tipo === 'avista' || tipo === 'parcelado_maquina' || tipo === 'pix' || prod.includes('iphone') || prod.includes('samsung') || prod.includes('xiaomi') || prod.includes('motorola') || prod.includes('redmi') || prod.includes('realme');
+                if (isCelular) {
+                    comissaoCiclo += Math.round(val * 0.03 * 100) / 100;
+                } else {
+                    const custo = parseFloat(v.custo || v.custoPeca || 0);
+                    let lucro = parseFloat(v.lucro !== undefined ? v.lucro : (val - custo));
+                    if (isNaN(lucro) || lucro < 0) lucro = 0;
+                    comissaoCiclo += Math.round(lucro * 100) / 100;
+                }
+            });
+            targetData.comissaoIlannaMensal = Math.round(comissaoCiclo * 100) / 100;
+        } catch (e) {
+            console.warn('[StrategyOS] Aviso ao reconciliar financeiro do ciclo:', e);
+        }
     }
 
     hojeLocal(dataObj = new Date()) {
@@ -107,6 +420,8 @@ class DataManager {
 
     executarZeramentoCicloMensal(cicloId, dataRefYMD = null, motivo = 'Zeramento Automático do Ciclo Mensal (Dia 6)') {
         const hojeYMD = dataRefYMD || this.hojeLocal();
+        const isManual = String(cicloId || '').startsWith('manual_');
+        const inicioCicloYMD = isManual ? hojeYMD : this._inicioCicloPorChave(cicloId, hojeYMD);
         const saldoPrincipalAnterior = this.data.financeiro?.caixaPrincipal || 0;
         const saldoGavetaAnterior = this.data.financeiro?.caixaSecundario || 0;
         const metaAnterior = this.data.comissaoIlannaMensal || 0;
@@ -136,7 +451,7 @@ class DataManager {
         this.data.financeiro.caixaSecundario = 0;
         this.data.comissaoIlannaMensal = 0;
         this.data.logComissaoMensal = [];
-        this.data.dataInicioCicloMeta = hojeYMD;
+        this.data.dataInicioCicloMeta = inicioCicloYMD;
         this.data.timestampInicioCicloMeta = new Date().toISOString();
         this.data.ultimoZeramentoId = cicloId;
 
@@ -145,12 +460,13 @@ class DataManager {
         this.data.meta.objetivo = 7000;
         this.data.meta.diaZeramento = DIA_ZERAMENTO_CICLO;
         this.data.meta.progressoAtual = 0;
-        this.data.meta.ultimoZeramento = hojeYMD;
+        this.data.meta.ultimoZeramento = inicioCicloYMD;
 
-        // Marca vendas anteriores como pertencentes ao ciclo fechado (preserva histórico sem acumular na nova meta)
+        // Marca apenas vendas ANTERIORES ao início do ciclo como fechadas (preserva vendas feitas no dia 6 em diante)
         if (this.data.historico && Array.isArray(this.data.historico.vendas)) {
             this.data.historico.vendas.forEach(v => {
-                if (!v._cicloMetaFechado) {
+                const dYMD = this._extrairDataYMD(v.data);
+                if (!v._cicloMetaFechado && (isManual || !dYMD || dYMD < inicioCicloYMD)) {
                     v._cicloMetaFechado = cicloId;
                 }
             });
@@ -166,6 +482,10 @@ class DataManager {
             descricao: `🔒 ${motivo} (${cicloId}): Caixa Principal, Gaveta e Meta (Alvo R$ 7.000,00) zerados para novo ciclo.`,
             data: new Date().toISOString()
         });
+
+        if (!isManual) {
+            this.reconciliarFinanceiroCicloAtual(this.data);
+        }
 
         this.saveData();
         console.log(`[StrategyOS] Zeramento automático do ciclo (${cicloId}) concluído: Caixa Principal, Gaveta e Meta zerados.`);
@@ -531,10 +851,10 @@ class DataManager {
                 'iphone x': 700, 'iphone xr': 750, 'iphone xs': 800, 'iphone xs max': 900,
                 'iphone 11': 900, 'iphone 11 pro': 1200, 'iphone 11 pro max': 1400,
                 'iphone se 2020': 600, 'iphone se 2022': 900,
-                'iphone 12': 1200, 'iphone 12 mini': 1000, 'iphone 12 pro': 1500, 'iphone 12 pro max': 1800,
-                'iphone 13': 1600, 'iphone 13 mini': 1300, 'iphone 13 pro': 2000, 'iphone 13 pro max': 2400,
-                'iphone 14': 2200, 'iphone 14 plus': 2500, 'iphone 14 pro': 2800, 'iphone 14 pro max': 3200,
-                'iphone 15': 3000, 'iphone 15 plus': 3400, 'iphone 15 pro': 3800, 'iphone 15 pro max': 4500,
+                'iphone 12': 900, 'iphone 12 mini': 700, 'iphone 12 pro': 1200, 'iphone 12 pro max': 1500,
+                'iphone 13': 1300, 'iphone 13 mini': 1000, 'iphone 13 pro': 1700, 'iphone 13 pro max': 2100,
+                'iphone 14': 1900, 'iphone 14 plus': 2200, 'iphone 14 pro': 2500, 'iphone 14 pro max': 2900,
+                'iphone 15': 2700, 'iphone 15 plus': 3100, 'iphone 15 pro': 3500, 'iphone 15 pro max': 4200,
                 // iPhone 16
                 'iphone 16': 4500, 'iphone 16 plus': 4900, 'iphone 16 pro': 5900, 'iphone 16 pro max': 6800,
                 // iPhone 17 (projeção)
@@ -961,24 +1281,23 @@ class DataManager {
     loadData() {
         try {
             let saved = localStorage.getItem(this.storageKey);
-            // Se não houver localStorage ou ainda não tiver sido hidratado com o backup oficial de 23/10/2026:
+            // Apenas hidrata com o backup inicial se o localStorage estiver completamente vazio ou corrompido (NUNCA sobrescreve dados existentes)
             if (typeof window !== 'undefined' && window.INITIAL_BACKUP_DATA) {
                 let precisaHidratar = !saved;
                 if (saved) {
                     try {
-                        const pCheck = JSON.parse(saved);
-                        if (!pCheck._hidratadoBackup20261023_v2) precisaHidratar = true;
+                        JSON.parse(saved);
                     } catch (e) { precisaHidratar = true; }
                 }
                 if (precisaHidratar) {
                     const defData = this.getDefaultData();
                     const bkp = JSON.parse(JSON.stringify(window.INITIAL_BACKUP_DATA));
-                    // Preservar a tabela expandida de peças de conserto do código novo + customizações do backup
                     bkp.tabelaServicosModelo = { ...(bkp.tabelaServicosModelo || {}), ...(defData.tabelaServicosModelo || {}) };
                     bkp.tabelaServicosMarca = { ...(bkp.tabelaServicosMarca || {}), ...(defData.tabelaServicosMarca || {}) };
                     bkp.tabelaPeliculasModelo = { ...(defData.tabelaPeliculasModelo || {}), ...(bkp.tabelaPeliculasModelo || {}) };
                     bkp._hidratadoBackup20261023 = true;
                     bkp._hidratadoBackup20261023_v2 = true;
+                    bkp._ultimoSaveLocal = 0; // Semente inicial: nunca deve sobrescrever a nuvem antes de sincronizar
                     saved = JSON.stringify(bkp);
                     try { localStorage.setItem(this.storageKey, saved); } catch (e) {}
                 }
@@ -989,6 +1308,9 @@ class DataManager {
                 const merged = this._merge(defRef, parsed);
                 merged.tabelaServicosModelo = { ...(parsed.tabelaServicosModelo || {}), ...(defRef.tabelaServicosModelo || {}) };
                 merged.tabelaServicosMarca = { ...(parsed.tabelaServicosMarca || {}), ...(defRef.tabelaServicosMarca || {}) };
+                merged.tabelaPeliculasModelo = { ...(defRef.tabelaPeliculasModelo || {}), ...(parsed.tabelaPeliculasModelo || {}) };
+                merged._hidratadoBackup20261023 = true;
+                merged._hidratadoBackup20261023_v2 = true;
                 if (!merged.fundoCustoEstoque) merged.fundoCustoEstoque = { totalAcumulado: 0, historicoCusto: [] };
                 if (!merged.fundoReposicaoFogos) merged.fundoReposicaoFogos = { totalAcumulado: 0, saldoGuardado: 0, historicoCusto: [], historicoMovimentacoes: [] };
                 if (!merged.divisaoLucro) merged.divisaoLucro = { totalLucroAcumulado: 0, porcentagemLoja: 40, porcentagemPai: 60, acumuladoLoja40: 0, acumuladoPai60: 0, historicoDivisao: [] };
@@ -1009,7 +1331,7 @@ class DataManager {
                 }
                 if (merged.historico && merged.historico.vendas && Array.isArray(merged.historico.vendas)) {
                     merged.historico.vendas = merged.historico.vendas.filter(v => {
-                        const val = parseFloat(v.valorVenda || v.valor || 0);
+                        const val = parseFloat(v.valorVenda || v.liquido || v.valorBruto || v.valor || 0);
                         if (val > 50000) return false;
                         return true;
                     });
@@ -1022,39 +1344,8 @@ class DataManager {
                 merged.meta.diaZeramento = DIA_ZERAMENTO_CICLO;
                 merged.meta.nome = '🎯 Meta Mensal da Loja';
 
-                // === CÁLCULO DINÂMICO E AUDITORIA DA META / COMISSÃO (CICLO CORRENTE) ===
-                const mesAtual = (merged.ultimoMesFechado || this.hojeLocal().substring(0, 7));
-                const dataInicioCiclo = merged.dataInicioCicloMeta || '';
-                let comissaoCalculada = 0;
-                if (merged.historico && Array.isArray(merged.historico.vendas)) {
-                    merged.historico.vendas.forEach(v => {
-                        if (v._cicloMetaFechado) return;
-                        const dataYMD = (v.data || '').substring(0, 10);
-                        if (dataInicioCiclo && dataYMD < dataInicioCiclo) return;
-                        const dt = (v.data || '').substring(0, 7);
-                        if (dt === mesAtual || (dataInicioCiclo && dataYMD >= dataInicioCiclo)) {
-                            const prod = (v.produto || '').toLowerCase();
-                            const tipo = (v.tipo || '').toLowerCase();
-                            const isFogos = tipo === 'fogos' || prod.includes('fogo') || prod.includes('19x4') || prod.includes('12x1') || prod.includes('foguete');
-                            
-                            if (!isFogos) {
-                                const val = parseFloat(v.valorVenda || v.valor || v.valorTotal || 0);
-                                const isCelular = tipo === 'celular' || tipo === 'avista' || tipo === 'parcelado_maquina' || tipo === 'pix' || prod.includes('iphone') || prod.includes('samsung') || prod.includes('xiaomi') || prod.includes('motorola') || prod.includes('redmi');
-                                
-                                if (isCelular) {
-                                    comissaoCalculada += Math.round(val * 0.03 * 100) / 100;
-                                } else {
-                                    const custo = parseFloat(v.custo || v.custoPeca || 0);
-                                    let lucro = parseFloat(v.lucro !== undefined ? v.lucro : (val - custo));
-                                    if (isNaN(lucro) || lucro < 0) lucro = 0; // Prejuízo não gera comissão
-                                    comissaoCalculada += Math.round(lucro * 100) / 100;
-                                }
-                            }
-                        }
-                    });
-                }
-
-                merged.comissaoIlannaMensal = Math.round(comissaoCalculada * 100) / 100;
+                // Reconciliar caixas e meta do ciclo corrente sem perder vendas
+                this.reconciliarFinanceiroCicloAtual(merged);
                 
                 // Garantir sanitização do saldo de caixa da gaveta (sem valores hardcoded)
                 if (merged.financeiro) {
@@ -1153,9 +1444,12 @@ class DataManager {
         return result;
     }
 
-    saveData() {
+    saveData(opcoes = {}) {
         try {
-            this.data._ultimoSaveLocal = Date.now();
+            const isBootOrSilent = Boolean(this._booting || (opcoes && opcoes.silencioso));
+            if (!isBootOrSilent) {
+                this.data._ultimoSaveLocal = Date.now();
+            }
             const jsonStr = JSON.stringify(this.data);
             localStorage.setItem(this.storageKey, jsonStr);
             localStorage.setItem(this.storageKey + '_backup', jsonStr);
@@ -1164,7 +1458,8 @@ class DataManager {
             this._salvarIndexedDB(jsonStr);
 
             // Camada 3: Sincronização Automática com Banco em Nuvem Cloudflare KV (debounce 2.5s)
-            if (!this.isModoTreino()) {
+            // Nunca agenda upload durante o boot inicial antes de sincronizar com a nuvem!
+            if (!isBootOrSilent && !this.isModoTreino()) {
                 this._agendarSyncCloudflare();
             }
 
@@ -1187,7 +1482,7 @@ class DataManager {
         this.cloudSyncUrl = 'https://cesinha-acessorios.pages.dev/api/cloud-sync';
         setTimeout(() => {
             this.sincronizarNuvemCloudflare();
-        }, 1500);
+        }, 500);
         if (!this._intervalCloudSync) {
             this._intervalCloudSync = setInterval(() => {
                 if (typeof document !== 'undefined' && document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) return;
@@ -1224,12 +1519,13 @@ class DataManager {
         if (this._timerSyncCF) clearTimeout(this._timerSyncCF);
         this._timerSyncCF = setTimeout(() => {
             this.salvarNuvemCloudflare();
-        }, 2500);
+        }, 1200);
     }
 
     async salvarNuvemCloudflare() {
         if (typeof window === 'undefined' || this.isModoTreino()) return;
         try {
+            this.reconciliarFinanceiroCicloAtual(this.data);
             const url = this.cloudSyncUrl || 'https://cesinha-acessorios.pages.dev/api/cloud-sync';
             await fetch(url, {
                 method: 'POST',
@@ -1255,13 +1551,45 @@ class DataManager {
             const localSaveTime = this.data._ultimoSaveLocal || 0;
             const cloudSaveTime = cloudPayload._ultimoSaveLocal || (json.updated_at ? new Date(json.updated_at).getTime() : 0);
 
-            if (cloudSaveTime > localSaveTime) {
-                this._mesclarDadosNuvemInteligente(cloudPayload, cloudSaveTime);
-                localStorage.setItem(this.storageKey, JSON.stringify(this.data));
-                if (typeof UI !== 'undefined' && typeof UI._atualizarAlertas === 'function') {
-                    UI._atualizarAlertas();
+            const antesVendas = (this.data.historico?.vendas || []).length;
+            const antesMovs = (this.data.movimentacoesCaixa || []).length;
+            const antesGaveta = this.data.financeiro?.caixaSecundario || 0;
+            const antesPrincipal = this.data.financeiro?.caixaPrincipal || 0;
+
+            // Sempre faz a união inteligente (nunca ignora vendas que estejam na nuvem ou localmente)
+            this._mesclarDadosNuvemInteligente(cloudPayload, cloudSaveTime);
+            this.reconciliarFinanceiroCicloAtual(this.data);
+            localStorage.setItem(this.storageKey, JSON.stringify(this.data));
+
+            const depoisVendas = (this.data.historico?.vendas || []).length;
+            const depoisMovs = (this.data.movimentacoesCaixa || []).length;
+            const depoisGaveta = this.data.financeiro?.caixaSecundario || 0;
+            const depoisPrincipal = this.data.financeiro?.caixaPrincipal || 0;
+
+            if (typeof UI !== 'undefined') {
+                if (typeof UI._atualizarAlertas === 'function') UI._atualizarAlertas();
+                const mudouDados = depoisVendas !== antesVendas || depoisMovs !== antesMovs || depoisGaveta !== antesGaveta || depoisPrincipal !== antesPrincipal;
+                if (mudouDados) {
+                    if (typeof UI._renderGraficoVendas === 'function' && document.getElementById('grafico-vendas')) {
+                        UI._renderGraficoVendas();
+                    }
+                    if (UI.paginaAtual === 'caixa' && typeof UI.renderCaixa === 'function') {
+                        UI.renderCaixa();
+                    } else if (UI.paginaAtual === 'inicio' && typeof UI.renderDashboard === 'function') {
+                        UI.renderDashboard();
+                    } else if (UI.paginaAtual === 'vendedor') {
+                        if (document.getElementById('container-grafico-vendedor') && typeof UI._verDashboardDesempenhoVendedor === 'function') {
+                            UI._verDashboardDesempenhoVendedor();
+                        } else if (document.querySelector('.vendedor-grid') && typeof UI.renderVendedor === 'function') {
+                            UI.renderVendedor();
+                        }
+                    }
                 }
-            } else if (localSaveTime > cloudSaveTime + 5000) {
+            }
+
+            const cloudVendasLen = (cloudPayload.historico?.vendas || []).length;
+            const cloudMovsLen = (cloudPayload.movimentacoesCaixa || []).length;
+            if ((localSaveTime > cloudSaveTime + 3000) || depoisVendas > cloudVendasLen || depoisMovs > cloudMovsLen) {
                 await this.salvarNuvemCloudflare();
             }
         } catch (e) {}
@@ -1275,11 +1603,16 @@ class DataManager {
         const mergedData = this._merge(defCloud, cloudPayload);
         mergedData.tabelaServicosModelo = { ...(cloudPayload.tabelaServicosModelo || {}), ...(defCloud.tabelaServicosModelo || {}), ...((this.data && this.data.tabelaServicosModelo) || {}) };
         const localTemDados = Boolean(this.data && this.data._ultimoSaveLocal && this.data._ultimoSaveLocal > 0);
+        const idsEstornados = new Set([
+            ...((this.data && Array.isArray(this.data._idsEstornados)) ? this.data._idsEstornados.map(String) : []),
+            ...((cloudPayload && Array.isArray(cloudPayload._idsEstornados)) ? cloudPayload._idsEstornados.map(String) : [])
+        ]);
+        mergedData._idsEstornados = Array.from(idsEstornados);
 
         const mergeArrayPorId = (localArr, cloudArr, idField) => {
             const map = new Map();
-            (cloudArr || []).forEach(item => { if (item && item[idField] !== undefined) map.set(String(item[idField]), item); });
-            (localArr || []).forEach(item => { if (item && item[idField] !== undefined) map.set(String(item[idField]), item); });
+            (cloudArr || []).forEach(item => { if (item && item[idField] !== undefined && !idsEstornados.has(String(item[idField]))) map.set(String(item[idField]), item); });
+            (localArr || []).forEach(item => { if (item && item[idField] !== undefined && !idsEstornados.has(String(item[idField]))) map.set(String(item[idField]), item); });
             return Array.from(map.values());
         };
 
@@ -1296,15 +1629,22 @@ class DataManager {
             const localOS = this.data.assistencia.ordensServico || [];
             const cloudOS = (cloudPayload.assistencia && cloudPayload.assistencia.ordensServico) || [];
             const mapOS = new Map();
-            cloudOS.forEach(o => mapOS.set(String(o.numero), o));
+            cloudOS.forEach(o => { if (o && !idsEstornados.has('OS_' + o.numero)) mapOS.set(String(o.numero), o); });
             localOS.forEach(o => {
+                if (!o || idsEstornados.has('OS_' + o.numero)) return;
                 const existing = mapOS.get(String(o.numero));
-                if (!existing || (o.dataEntrega && !existing.dataEntrega) || o.status !== existing.status) {
+                if (!existing || (o.dataEntrega && !existing.dataEntrega) || o.status !== existing.status || (o.pago || 0) > (existing.pago || 0)) {
                     mapOS.set(String(o.numero), o);
                 }
             });
             if (!mergedData.assistencia) mergedData.assistencia = {};
             mergedData.assistencia.ordensServico = Array.from(mapOS.values()).sort((a, b) => b.numero - a.numero);
+            const maxNum = mergedData.assistencia.ordensServico.reduce((m, o) => Math.max(m, Number(o.numero) || 0), 0);
+            mergedData.assistencia.proximoNumero = Math.max(
+                Number(this.data.assistencia.proximoNumero) || 1,
+                Number(cloudPayload.assistencia?.proximoNumero) || 1,
+                maxNum + 1
+            );
         } else if (cloudPayload.assistencia && cloudPayload.assistencia.ordensServico) {
             mergedData.assistencia = cloudPayload.assistencia;
         }
@@ -1334,56 +1674,57 @@ class DataManager {
             mergedData.produtosProcurados = mergeArrayPorId(localProc, cloudProc, 'id');
         }
 
-        // 4. Histórico de Vendas e Movimentações (UNIÃO com deduplicação — nunca perder vendas de hoje)
+        // 4. Histórico de Vendas e Movimentações (UNIÃO com deduplicação — nunca perder vendas)
         {
             const localVendas = (this.data && this.data.historico && this.data.historico.vendas) || [];
             const cloudVendas = (cloudPayload.historico && cloudPayload.historico.vendas) || [];
-            if (localVendas.length > 0 && cloudVendas.length > 0) {
+            if (localVendas.length > 0 || cloudVendas.length > 0) {
                 const mapVendas = new Map();
                 cloudVendas.forEach(v => {
-                    const k = v.id || `${v.data}_${v.produto}_${v.valorVenda || v.valorBruto || 0}`;
-                    mapVendas.set(k, v);
+                    if (!v) return;
+                    const k = String(v.id || `${(v.data || '').substring(0, 16)}_${v.produto || ''}_${v.valorVenda || v.liquido || v.valorBruto || v.valor || 0}`);
+                    if (!idsEstornados.has(k)) mapVendas.set(k, v);
                 });
                 localVendas.forEach(v => {
-                    const k = v.id || `${v.data}_${v.produto}_${v.valorVenda || v.valorBruto || 0}`;
-                    mapVendas.set(k, v);
+                    if (!v) return;
+                    const k = String(v.id || `${(v.data || '').substring(0, 16)}_${v.produto || ''}_${v.valorVenda || v.liquido || v.valorBruto || v.valor || 0}`);
+                    if (!idsEstornados.has(k)) mapVendas.set(k, v);
                 });
                 if (!mergedData.historico) mergedData.historico = { vendas: [], compras: [], movimentacoes: [] };
                 mergedData.historico.vendas = Array.from(mapVendas.values());
-            } else {
-                if (!mergedData.historico) mergedData.historico = { vendas: [], compras: [], movimentacoes: [] };
-                mergedData.historico.vendas = maiorArrayVence(localVendas, cloudVendas);
             }
         }
         {
             const localMovs = (this.data && this.data.movimentacoesCaixa) || [];
             const cloudMovs = cloudPayload.movimentacoesCaixa || [];
-            if (localMovs.length > 0 && cloudMovs.length > 0) {
+            if (localMovs.length > 0 || cloudMovs.length > 0) {
                 const mapMovs = new Map();
                 cloudMovs.forEach(m => {
-                    const k = m.id || `${m.data}_${m.tipo}_${m.valor || 0}`;
-                    mapMovs.set(k, m);
+                    if (!m) return;
+                    const k = String(m.id || `${(m.data || '').substring(0, 16)}_${m.tipo || ''}_${m.valor || 0}_${(m.descricao || '').substring(0, 25)}`);
+                    if (!idsEstornados.has(k)) mapMovs.set(k, m);
                 });
                 localMovs.forEach(m => {
-                    const k = m.id || `${m.data}_${m.tipo}_${m.valor || 0}`;
-                    mapMovs.set(k, m);
+                    if (!m) return;
+                    const k = String(m.id || `${(m.data || '').substring(0, 16)}_${m.tipo || ''}_${m.valor || 0}_${(m.descricao || '').substring(0, 25)}`);
+                    if (!idsEstornados.has(k)) mapMovs.set(k, m);
                 });
                 mergedData.movimentacoesCaixa = Array.from(mapMovs.values());
-            } else {
-                mergedData.movimentacoesCaixa = maiorArrayVence(localMovs, cloudMovs);
             }
         }
 
-        // 5. DADOS FINANCEIROS — Preservar saldo local se local for mais recente ou tiver vendas/movimentações
-        const localMovsCount = (this.data && this.data.movimentacoesCaixa && this.data.movimentacoesCaixa.length) || 0;
-        const cloudMovsCount = (cloudPayload && cloudPayload.movimentacoesCaixa && cloudPayload.movimentacoesCaixa.length) || 0;
-        const localVendasCount = (this.data && this.data.historico && this.data.historico.vendas && this.data.historico.vendas.length) || 0;
-        const cloudVendasCount = (cloudPayload && cloudPayload.historico && cloudPayload.historico.vendas && cloudPayload.historico.vendas.length) || 0;
-
-        if (localTemDados && (localSaveTime >= cloudSaveTime || localVendasCount >= cloudVendasCount || localMovsCount >= cloudMovsCount)) {
-            if (this.data.financeiro) mergedData.financeiro = this.data.financeiro;
-            if (this.data.comissaoIlannaMensal !== undefined) mergedData.comissaoIlannaMensal = this.data.comissaoIlannaMensal;
-            if (this.data.logComissaoMensal) mergedData.logComissaoMensal = this.data.logComissaoMensal;
+        // 5. DADOS FINANCEIROS — Preservar o maior saldo ou mais recente e depois reconciliar pelo extrato do ciclo
+        if (this.data && this.data.financeiro && cloudPayload.financeiro) {
+            if (!mergedData.financeiro) mergedData.financeiro = {};
+            const fLocal = this.data.financeiro;
+            const fCloud = cloudPayload.financeiro;
+            if (localTemDados && localSaveTime >= cloudSaveTime) {
+                mergedData.financeiro = { ...fCloud, ...fLocal };
+            } else {
+                mergedData.financeiro = { ...fLocal, ...fCloud };
+                mergedData.financeiro.caixaSecundario = Math.max(parseFloat(fLocal.caixaSecundario) || 0, parseFloat(fCloud.caixaSecundario) || 0);
+                mergedData.financeiro.caixaPrincipal = Math.max(parseFloat(fLocal.caixaPrincipal) || 0, parseFloat(fCloud.caixaPrincipal) || 0);
+            }
         }
 
         // 6. ESTOQUE — Merge inteligente por ID (UNIÃO, nunca perder itens)
@@ -1422,6 +1763,7 @@ class DataManager {
             if (this.data.ultimoFechamentoDiario) mergedData.ultimoFechamentoDiario = this.data.ultimoFechamentoDiario;
         }
 
+        this.reconciliarFinanceiroCicloAtual(mergedData);
         this.data = mergedData;
         return mergedData;
     }
@@ -1733,12 +2075,13 @@ class DataManager {
 
         // 2. Histórico de Vendas (Apenas vendas que NÃO constam em movimentacoesCaixa)
         (this.data.historico?.vendas || []).forEach(v => {
-            const sig = `${(v.data || '').substring(0, 16)}_${parseFloat(v.valorVenda || v.valor || 0).toFixed(2)}`;
-            const idKey = v.id || `${v.data}_${v.valorVenda || v.valor}_${v.produto}`;
+            const valVenda = parseFloat(v.valorVenda || v.liquido || v.valorBruto || v.valor || 0);
+            const sig = `${(v.data || '').substring(0, 16)}_${valVenda.toFixed(2)}`;
+            const idKey = v.id || `${v.data}_${valVenda}_${v.produto}`;
             if (!idsVistos.has(idKey) && !vendasVistas.has(sig)) {
                 idsVistos.add(idKey);
                 vendasVistas.add(sig);
-                const val = parseFloat(v.valorVenda || v.valor || 0);
+                const val = valVenda;
                 const c = parseFloat(v.custo || 0);
                 const luc = Math.max(0, val - c);
                 lista.push({
@@ -1807,8 +2150,9 @@ class DataManager {
         const t = (m.tipo || '').toLowerCase();
         const tiposNaoVenda = [
             'despesa', 'saida', 'sangria', 'transferencia', 'fechamento_caixa',
-            'fechamento_semanal', 'zerado', 'deposito_fundo', 'uso_fundo',
-            'compra_estoque', 'suprimento', 'alteracao_sistema'
+            'fechamento_semanal', 'fechamento_diario_auto', 'virada_mes_auto',
+            'zerado', 'zerado_manual', 'deposito_fundo', 'uso_fundo',
+            'compra_estoque', 'estoque_cadastro', 'suprimento', 'alteracao_sistema'
         ];
         if (tiposNaoVenda.includes(t)) return false;
         if (t === 'entrada' && (m.motivo || '').toLowerCase() !== 'venda manual') return false;
@@ -2152,49 +2496,73 @@ class DataManager {
         return { sucesso: true, produto: novo, caixaAtual: f.caixaPrincipal };
     }
 
-    // ===== REGISTRAR TROCA (2 entradas: venda + aquisição do usado) =====
-    registrarTrocaNoEstoque(produtoId, precoFinal, valorJusto, descricaoHistorico) {
+    // ===== REGISTRAR TROCA (Baixa no estoque + Entrada da Volta no Caixa + Cadastro do Usado) =====
+    registrarTrocaNoEstoque(produtoId, precoFinal, valorJusto, descricaoHistorico, opcoesExtras = {}) {
         const idx = this.data.estoqueCelulares.findIndex(p => String(p.id) === String(produtoId));
-        if (idx === -1) return { sucesso: false, erro: 'Produto não encontrado' };
-        const prod = this.data.estoqueCelulares[idx];
-        prod.status = 'vendido';
+        const prod = idx !== -1 ? this.data.estoqueCelulares[idx] : null;
+        if (!prod && !opcoesExtras.permitirSemEstoque) return { sucesso: false, erro: 'Produto não encontrado no estoque' };
 
-        // O produto novo saiu do estoque pelo precoFinal
-        this.data.financeiro.caixaPrincipal += precoFinal;
-        this.data.financeiro.caixaSecundario += precoFinal;
-        // O produto usado entrou: custo = valorJusto (saiu do caixa virtualmente)
-        this.data.financeiro.caixaPrincipal -= valorJusto;
+        const nomeProdSaida = prod ? prod.nome : (opcoesExtras.nomeProdutoManual || 'Aparelho Loja');
+        const custoProdSaida = prod ? (parseFloat(prod.custo) || 0) : (parseFloat(opcoesExtras.custoManual) || 0);
 
-        const valorLiquido = precoFinal - valorJusto;
+        if (prod) {
+            if (prod.quantidade && prod.quantidade > 1) {
+                prod.quantidade -= 1;
+            } else {
+                prod.quantidade = 0;
+                prod.status = 'vendido';
+            }
+            prod.dataVenda = this.hojeLocal ? this.hojeLocal() : new Date().toISOString().split('T')[0];
+        }
+
+        const valorLiquido = Math.max(0, (parseFloat(precoFinal) || 0) - (parseFloat(valorJusto) || 0));
+        const valorRecebidoCaixa = opcoesExtras.valorLiquidoMaquina !== undefined ? parseFloat(opcoesExtras.valorLiquidoMaquina) : valorLiquido;
+        const forma = opcoesExtras.formaPagamento || 'pix';
+        const caixaDest = forma === 'dinheiro' ? 'caixaSecundario' : 'caixaPrincipal';
+        const custoLiquidoOperacao = Math.max(0, custoProdSaida - (parseFloat(valorJusto) || 0));
+        const lucroOperacao = valorRecebidoCaixa - custoLiquidoOperacao;
+        const agoraIso = new Date().toISOString();
 
         this.data.historico.vendas.push({
-            data: new Date().toISOString(), produto: prod.nome,
-            custo: prod.custo, valorVenda: precoFinal,
-            lucro: precoFinal - prod.custo, tipo: 'troca',
-            dias: this.diasNoEstoque(prod)
+            id: Date.now(),
+            data: agoraIso,
+            produto: `Troca: ${nomeProdSaida}${opcoesExtras.modeloUsado ? ' (Entrada: ' + opcoesExtras.modeloUsado + ')' : ''}`,
+            produtoNovo: nomeProdSaida,
+            precoTabela: precoFinal,
+            creditoTroca: valorJusto,
+            custo: custoLiquidoOperacao,
+            valorVenda: valorRecebidoCaixa,
+            valorBruto: valorLiquido,
+            lucro: lucroOperacao,
+            tipo: 'troca',
+            formaPagamento: forma,
+            caixaDestino: caixaDest,
+            cliente: opcoesExtras.cliente || 'Cliente Loja',
+            dias: prod ? this.diasNoEstoque(prod) : 0
         });
 
-        // Entrada: venda do produto novo
         this.data.historico.movimentacoes.push({
-            data: new Date().toISOString(), tipo: 'troca',
-            descricao: `${descricaoHistorico} — Venda: ${prod.nome} (R$ ${precoFinal.toFixed(2).replace('.', ',')})`,
-            valor: precoFinal,
-            _meta: { produtoId, produtoNome: prod.nome, valorVenda: precoFinal, caixa: 'principal', eTroca: true }
+            data: agoraIso,
+            tipo: 'troca',
+            descricao: `${descricaoHistorico} — Volta recebida (${forma.toUpperCase()}): R$ ${valorRecebidoCaixa.toFixed(2).replace('.', ',')}`,
+            valor: valorRecebidoCaixa,
+            _meta: { produtoId, produtoNome: nomeProdSaida, valorVenda: valorRecebidoCaixa, creditoTroca: valorJusto, caixa: caixaDest, eTroca: true }
         });
 
-        // Saída: aquisição do aparelho usado
-        if (valorJusto > 0) {
-            this.data.historico.movimentacoes.push({
-                data: new Date().toISOString(), tipo: 'troca',
-                descricao: `Troca — Aparelho usado recebido (valor: R$ ${valorJusto.toFixed(2).replace('.', ',')})`,
-                valor: -valorJusto,
-                _meta: { valorJusto, caixa: 'principal', eAquisicaoUsado: true }
+        if (typeof this._registrarSincronizacaoFinanceira === 'function' && valorRecebidoCaixa > 0) {
+            this._registrarSincronizacaoFinanceira({
+                tipo: forma === 'dinheiro' ? 'troca_dinheiro' : `troca_${forma}`,
+                produto: `Troca: ${nomeProdSaida}${opcoesExtras.modeloUsado ? ' (Entrada: ' + opcoesExtras.modeloUsado + ')' : ''}`,
+                valorVenda: valorRecebidoCaixa,
+                custo: custoLiquidoOperacao,
+                caixaDestino: caixaDest,
+                cliente: opcoesExtras.cliente || 'Cliente Loja'
             });
         }
 
-        this._aprenderVenda(prod, precoFinal);
+        if (prod) this._aprenderVenda(prod, precoFinal);
         this.saveData();
-        return { sucesso: true, produto: prod.nome, valorLiquido };
+        return { sucesso: true, produto: nomeProdSaida, valorLiquido: valorRecebidoCaixa, lucroOperacao };
     }
 
     limparEstoqueVendido() {
@@ -2214,6 +2582,94 @@ class DataManager {
         }
     }
 
+    // ===== BUSCA INTELIGENTE (FUZZY MATCH) NO ESTOQUE PARA VENDAS AVULSAS / DIGITAÇÃO LIVRE =====
+    buscarMatchEstoqueInteligente(textoDigitado) {
+        if (!textoDigitado || typeof textoDigitado !== 'string') return null;
+        const norm = (str) => String(str || '')
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/([a-z])(\d)/g, '$1 $2') // "iphone11" -> "iphone 11"
+            .replace(/(\d)\s*gb\b/g, '$1gb')
+            .replace(/[^a-z0-9\s]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        const stopWords = new Set([
+            'celular', 'aparelho', 'smartphone', 'telefone', 'avulso', 'avulsa',
+            'venda', 'item', 'produto', 'novo', 'seminovo', 'usado', 'lacrado',
+            'original', 'de', 'do', 'da', 'dos', 'das', 'com', 'para', 'por', 'um', 'uma', 'o', 'a'
+        ]);
+        const sufixosVariante = new Set(['pro', 'max', 'plus', 'mini', 'ultra', 'fe', 'note', 'play', 'lite']);
+        const atributosOpcionais = new Set([
+            '32gb', '64gb', '128gb', '256gb', '512gb', '1tb', '1024gb',
+            'preto', 'branco', 'azul', 'verde', 'roxo', 'rosa', 'dourado',
+            'grafite', 'estelar', 'vermelho', 'amarelo', 'prata', 'cinza', 'titanio', 'natural'
+        ]);
+
+        const qFull = norm(textoDigitado);
+        const qTokens = qFull.split(' ').filter(t => t && !stopWords.has(t));
+        if (qTokens.length === 0) return null;
+
+        const candidatos = [];
+        const avulsosCel = (this.data.estoqueCelulares || []).filter(p => p && p.status !== 'vendido' && (p.quantidade === undefined || p.quantidade > 0));
+        const avulsosAce = (this.data.estoqueAcessorios || []).filter(p => p && p.status !== 'vendido' && (p.quantidade === undefined || p.quantidade > 0));
+
+        const avaliarItem = (prod, origemLista) => {
+            const pNorm = norm(prod.nome);
+            if (!pNorm) return;
+            const pTokens = pNorm.split(' ').filter(t => t && !stopWords.has(t));
+            if (pTokens.length === 0) return;
+
+            // 1. Match exato após remover stopwords (ex: "celular iphone 11" === "iphone 11")
+            if (qTokens.join(' ') === pTokens.join(' ')) {
+                candidatos.push({ prod, origemLista, score: 100, motivo: 'Match exato de modelo' });
+                return;
+            }
+
+            // Separar tokens essenciais do produto (ex: "iphone", "11") dos opcionais ("128gb", "preto")
+            const pCore = pTokens.filter(t => !atributosOpcionais.has(t));
+            const qCore = qTokens.filter(t => !atributosOpcionais.has(t));
+            if (pCore.length === 0 || qCore.length === 0) return;
+
+            // Verificar se há conflito de variante crítica (ex: buscou "iphone 11" e o estoque é "iphone 11 pro max")
+            for (const suf of sufixosVariante) {
+                const prodTem = pCore.includes(suf);
+                const queryTem = qCore.includes(suf);
+                if (prodTem !== queryTem) return; // Não confunde versão base com Pro/Max/Plus/Mini
+            }
+
+            // Verificar quantos tokens essenciais batem
+            let hitsCore = 0;
+            for (const qt of qCore) {
+                if (pCore.some(pt => pt === qt || (qt.length >= 4 && pt.startsWith(qt)) || (pt.length >= 4 && qt.startsWith(pt)))) {
+                    hitsCore++;
+                }
+            }
+
+            const coberturaProd = hitsCore / pCore.length;
+            const coberturaQuery = hitsCore / qCore.length;
+
+            if (coberturaProd >= 0.99 && coberturaQuery >= 0.75) {
+                let score = 88;
+                // Bônus se bateu memória/cor opcional
+                const pOpt = pTokens.filter(t => atributosOpcionais.has(t));
+                const qOpt = qTokens.filter(t => atributosOpcionais.has(t));
+                for (const qo of qOpt) {
+                    if (pOpt.includes(qo)) score += 6;
+                    else if (pOpt.length > 0) score -= 12; // Memória diferente da digitada
+                }
+                candidatos.push({ prod, origemLista, score: Math.min(99, score), motivo: 'Match inteligente de modelo' });
+            }
+        };
+
+        avulsosCel.forEach(p => avaliarItem(p, 'celulares'));
+        avulsosAce.forEach(p => avaliarItem(p, 'acessorios'));
+
+        if (candidatos.length === 0) return null;
+        candidatos.sort((a, b) => b.score - a.score);
+        return candidatos[0].score >= 75 ? candidatos[0] : null;
+    }
+
     // ===== VENDER CARRINHO COMPLETO (MULTI-PRODUTOS E MULTI-PAGAMENTOS) =====
     venderCarrinho(itens, pagamentos, cliente = '') {
         try {
@@ -2221,10 +2677,42 @@ class DataManager {
             let valorVendaTotal = 0;
             let nomes = [];
 
-            // 1. Processar itens (reduzir estoque)
+            // 1. Processar itens (reduzir estoque — inclusive se digitado como avulso mas existir no estoque!)
             for (let item of itens) {
                 const isAvulso = (item.tipo === 'avulso' || item._tipo === 'avulso' || !item.id || String(item.id).startsWith('avulso'));
-                if (isAvulso) {
+                if (isAvulso && item.ignorarAutoEstoque !== true) {
+                    let matchEstoque = null;
+                    if (item._estoqueMatchId && item._estoqueMatchLista) {
+                        const listaRef = item._estoqueMatchLista === 'acessorios' ? this.data.estoqueAcessorios : this.data.estoqueCelulares;
+                        const prodRef = (listaRef || []).find(p => String(p.id) === String(item._estoqueMatchId) && p.status !== 'vendido');
+                        if (prodRef) matchEstoque = { prod: prodRef, origemLista: item._estoqueMatchLista, score: 100 };
+                    }
+                    if (!matchEstoque && item.nome) {
+                        matchEstoque = this.buscarMatchEstoqueInteligente(item.nome);
+                    }
+
+                    if (matchEstoque && matchEstoque.prod) {
+                        const prod = matchEstoque.prod;
+                        const custoItem = (parseFloat(item.custo) > 0 && item._custoManualEditado)
+                            ? parseFloat(item.custo)
+                            : parseFloat(prod.custo || item.custo || 0);
+                        const vendaItem = parseFloat(item.precoFinal || item.precoVenda || item.valor || prod.precoVenda || 0);
+
+                        custoTotal += custoItem;
+                        valorVendaTotal += vendaItem;
+                        nomes.push(`${prod.nome} (Auto-Estoque)`);
+                        item._autoBaixaEstoque = { id: prod.id, nome: prod.nome, origemLista: matchEstoque.origemLista };
+
+                        if (prod.quantidade && prod.quantidade > 1) {
+                            prod.quantidade -= 1;
+                        } else {
+                            prod.quantidade = 0;
+                            prod.status = 'vendido';
+                        }
+                        prod.dataVenda = this.hojeLocal ? this.hojeLocal() : new Date().toISOString().split('T')[0];
+                        continue;
+                    }
+
                     custoTotal += parseFloat(item.custo || item.precoCusto || 0);
                     valorVendaTotal += parseFloat(item.precoFinal || item.precoVenda || item.valor || 0);
                     nomes.push("Avulso: " + (item.nome || 'Item Avulso'));
@@ -2260,7 +2748,9 @@ class DataManager {
             const nomeComposto = nomes.length > 0 ? nomes.join(' + ') : 'Venda Avulsa';
 
             // 2. Registrar no Histórico de Vendas (como uma única venda composta)
+            const vendaId = this._gerarIdUnico('vnd');
             this.data.historico.vendas.push({
+                id: vendaId,
                 data: new Date().toISOString(),
                 produto: nomeComposto + ` (${itens.length || 1} itens)`,
                 custo: custoTotal,
@@ -2271,23 +2761,30 @@ class DataManager {
                 pagamentoDivisao: pagamentos // Array de pagamentos pra histórico
             });
 
-            // 3. Processar Movimentações Financeiras
-            for (let pag of pagamentos) {
-                const valPag = parseFloat(pag.valor) || 0;
-                const proporcao = valorVendaTotal > 0 ? (valPag / valorVendaTotal) : 1;
-                const lucroPag = Math.round(lucroTotal * proporcao * 100) / 100;
-                const custoPag = Math.round(custoTotal * proporcao * 100) / 100;
+            // 3. Processar Movimentações Financeiras em lote (sem acionar reconciliação intermediária no meio do loop)
+            this._emLotePagamento = true;
+            try {
+                for (let pag of pagamentos) {
+                    const valPag = parseFloat(pag.valor) || 0;
+                    if (valPag <= 0) continue;
+                    const proporcao = valorVendaTotal > 0 ? (valPag / valorVendaTotal) : 1;
+                    const lucroPag = Math.round(lucroTotal * proporcao * 100) / 100;
+                    const custoPag = Math.round(custoTotal * proporcao * 100) / 100;
 
-                // Registra pro fechamento e relatórios diários
-                this._registrarSincronizacaoFinanceira({
-                    tipo: 'venda_multi',
-                    produto: nomeComposto,
-                    valorVenda: valPag,
-                    lucro: lucroPag,
-                    custo: custoPag,
-                    caixaDestino: pag.caixa || 'caixaSecundario',
-                    cliente: cliente
-                });
+                    // Registra pro fechamento e relatórios diários
+                    this._registrarSincronizacaoFinanceira({
+                        tipo: 'venda_multi',
+                        produto: nomeComposto,
+                        valorVenda: valPag,
+                        lucro: lucroPag,
+                        custo: custoPag,
+                        caixaDestino: pag.caixa || 'caixaSecundario',
+                        cliente: cliente,
+                        ignorarHistoricoVendas: true
+                    });
+                }
+            } finally {
+                this._emLotePagamento = false;
             }
 
             this.limparEstoqueVendido();
@@ -2296,6 +2793,9 @@ class DataManager {
             // Sincronizar imediatamente com a nuvem Cloudflare (sem esperar debounce)
             if (typeof this.salvarNuvemCloudflare === 'function') {
                 this.salvarNuvemCloudflare();
+            }
+            if (typeof UI !== 'undefined' && typeof UI._renderGraficoVendas === 'function' && document.getElementById('grafico-vendas')) {
+                UI._renderGraficoVendas();
             }
 
             return { sucesso: true };
@@ -2317,7 +2817,7 @@ class DataManager {
             prod.quantidade = 0;
             prod.status = 'vendido';
         }
-        this.data.historico.vendas.push({ data: new Date().toISOString(), produto: prod.nome, custo: prod.custo, valorVenda, lucro, tipo: 'avista', dias: this.diasNoEstoque(prod), cliente: cliente || 'Não Identificado', caixaDestino });
+        this.data.historico.vendas.push({ id: this._gerarIdUnico('vnd'), data: new Date().toISOString(), produto: prod.nome, custo: prod.custo, valorVenda, lucro, tipo: 'avista', dias: this.diasNoEstoque(prod), cliente: cliente || 'Não Identificado', caixaDestino });
         
         this._registrarSincronizacaoFinanceira({
             tipo: 'venda_celular_avista',
@@ -2359,7 +2859,7 @@ class DataManager {
             prod.quantidade = 0;
             prod.status = 'vendido';
         }
-        this.data.historico.vendas.push({ data: new Date().toISOString(), produto: prod.nome, custo: prod.custo, valorBruto, taxa, liquido, lucro, tipo: bandeira === 'pix' ? 'pix' : 'parcelado_maquina', parcelas, dias: this.diasNoEstoque(prod), cliente: cliente || 'Não Identificado' });
+        this.data.historico.vendas.push({ id: this._gerarIdUnico('vnd'), data: new Date().toISOString(), produto: prod.nome, custo: prod.custo, valorVenda: liquido, valor: liquido, valorBruto, taxa, liquido, lucro, tipo: bandeira === 'pix' ? 'pix' : 'parcelado_maquina', parcelas, dias: this.diasNoEstoque(prod), cliente: cliente || 'Não Identificado', caixaDestino: 'caixaPrincipal' });
         
         this._registrarSincronizacaoFinanceira({
             tipo: bandeira === 'pix' ? 'venda_pix' : 'venda_cartao',
@@ -2399,8 +2899,13 @@ class DataManager {
         }
         let cl = this.data.clientes.find(c => c.nome.toLowerCase() === cliente.toLowerCase());
         if (!cl) { cl = this._criarClientePadrao(cliente); this.data.clientes.push(cl); }
-        this.data.historico.vendas.push({ data: new Date().toISOString(), produto: prod.nome, custo: prod.custo, valorVenda: valorTotal, entrada, tipo: 'crediario', parcelas, cliente, dias: this.diasNoEstoque(prod) });
-        this.data.historico.movimentacoes.push({ data: new Date().toISOString(), tipo: 'venda', descricao: `Crediário ${parcelas}x: ${prod.nome} → ${cliente}`, valor: entrada, _meta: { produtoId, produtoNome: prod.nome, valorVenda: entrada, crediarioId: novoId, caixa: 'principal' } });
+        const agoraCredIso = new Date().toISOString();
+        this.data.historico.vendas.push({ id: this._gerarIdUnico('cred'), data: agoraCredIso, produto: prod.nome, custo: prod.custo, valorVenda: valorTotal, entrada, tipo: 'crediario', parcelas, cliente, dias: this.diasNoEstoque(prod), caixaDestino: 'caixaSecundario' });
+        this.data.historico.movimentacoes.push({ data: agoraCredIso, tipo: 'venda', descricao: `Crediário ${parcelas}x: ${prod.nome} → ${cliente}`, valor: entrada, _meta: { produtoId, produtoNome: prod.nome, valorVenda: entrada, crediarioId: novoId, caixa: 'principal' } });
+        if (entrada > 0) {
+            if (!this.data.movimentacoesCaixa) this.data.movimentacoesCaixa = [];
+            this.data.movimentacoesCaixa.push({ id: this._gerarIdUnico('mov'), data: agoraCredIso, tipo: 'venda', caixa: 'caixaSecundario', valor: entrada, custo: Math.min(entrada, prod.custo || 0), lucro: Math.max(0, entrada - Math.min(entrada, prod.custo || 0)), cliente, descricao: `CREDIÁRIO ENTRADA (${parcelas}x): ${prod.nome} — R$ ${entrada.toFixed(2)}` });
+        }
         this._aprenderVenda(prod, valorTotal);
         this.saveData();
         return { sucesso: true, produto: prod.nome, crediario: cred, caixa: this.data.financeiro.caixaPrincipal };
@@ -2415,7 +2920,8 @@ class DataManager {
         // Corrigir caixa se ficou NaN de bug anterior
         if (isNaN(this.data.financeiro.caixaPrincipal)) this.data.financeiro.caixaPrincipal = 0;
         cred.parcelasPagas++;
-        cred.historicoPagamentos.push({ data: new Date().toISOString(), valor: valorRecebido });
+        const agoraParcIso = new Date().toISOString();
+        cred.historicoPagamentos.push({ data: agoraParcIso, valor: valorRecebido });
         this.data.financeiro.caixaSecundario += valorRecebido;
         if (cred.parcelasPagas >= cred.parcelasTotal) {
             cred.status = 'quitado';
@@ -2429,7 +2935,9 @@ class DataManager {
             const cl = this.data.clientes.find(c => c.nome === cred.cliente);
             if (cl) { cl.parcelasEmDia++; cl.score = Math.min(1000, cl.score + 30); }
         }
-        this.data.historico.movimentacoes.push({ data: new Date().toISOString(), tipo: 'parcela', descricao: `Parcela ${cred.parcelasPagas}/${cred.parcelasTotal}: ${cred.cliente}`, valor: valorRecebido, _meta: { crediarioId, valorParcela: valorRecebido, parcela: cred.parcelasPagas, caixa: 'principal' } });
+        if (!this.data.movimentacoesCaixa) this.data.movimentacoesCaixa = [];
+        this.data.movimentacoesCaixa.push({ id: this._gerarIdUnico('mov'), data: agoraParcIso, tipo: 'entrada', motivo: 'Parcela Crediário', caixa: 'caixaSecundario', valor: valorRecebido, cliente: cred.cliente, descricao: `PARCELA ${cred.parcelasPagas}/${cred.parcelasTotal}: ${cred.cliente} — R$ ${valorRecebido.toFixed(2)}` });
+        this.data.historico.movimentacoes.push({ data: agoraParcIso, tipo: 'parcela', descricao: `Parcela ${cred.parcelasPagas}/${cred.parcelasTotal}: ${cred.cliente}`, valor: valorRecebido, _meta: { crediarioId, valorParcela: valorRecebido, parcela: cred.parcelasPagas, caixa: 'principal' } });
         this.saveData();
         return { sucesso: true, parcela: `${cred.parcelasPagas}/${cred.parcelasTotal}`, status: cred.status, caixa: this.data.financeiro.caixaPrincipal };
     }
@@ -3113,7 +3621,7 @@ class DataManager {
     }
 
     // ===== SINCRONIZAÇÃO FINANCEIRA GLOBAL & DIVISÃO DE LUCROS (40% LOJA / 60% PAI) =====
-    _registrarSincronizacaoFinanceira({ tipo, produto, valorVenda, custo, caixaDestino, cliente }) {
+    _registrarSincronizacaoFinanceira({ tipo, produto, valorVenda, custo, caixaDestino, cliente, ignorarHistoricoVendas = false }) {
         if (this.isModoTreino()) {
             console.log('[StrategyOS] Modo Treino ativo — Venda/Movimentação simulada não será registrada no financeiro real.');
             return;
@@ -3275,10 +3783,11 @@ class DataManager {
         });
 
         // 3. Extrato Geral de Movimentações
+        const agoraIso = new Date().toISOString();
         if (!this.data.movimentacoesCaixa) this.data.movimentacoesCaixa = [];
         this.data.movimentacoesCaixa.push({
             id: Date.now() + Math.floor(Math.random() * 1000),
-            data: new Date().toISOString(),
+            data: agoraIso,
             tipo: tipo || 'venda',
             caixa: caixaDestino || 'caixaPrincipal',
             valor: valorTotal,
@@ -3290,9 +3799,43 @@ class DataManager {
             descricao: `${(tipo || 'venda').toUpperCase()}: ${produto} — ${UI.R(valorTotal)} (Custo Peça: ${UI.R(valorCusto)} | Lucro Líquido: ${UI.R(lucroLiquido)} [40% Loja: ${UI.R(parteLoja)} | 60% Pai: ${UI.R(partePai)}])`
         });
 
+        // 4. Garantir que toda venda/recebimento de OS también conste em historico.vendas para gráficos e relatórios
+        if (!ignorarHistoricoVendas && valorTotal > 0) {
+            if (!this.data.historico) this.data.historico = { vendas: [], compras: [], movimentacoes: [] };
+            if (!Array.isArray(this.data.historico.vendas)) this.data.historico.vendas = [];
+            const agoraMs = Date.now();
+            const jaExisteRecente = this.data.historico.vendas.some(v => {
+                const ts = this.parseDataSafe(v.data);
+                const valV = parseFloat(v.valorVenda || v.liquido || v.valorBruto || v.valor || 0);
+                return Math.abs(agoraMs - ts) < 6000 && (Math.abs(valV - valorTotal) < 0.05 || (v.tipo === 'multi' && valV >= valorTotal));
+            });
+            if (!jaExisteRecente) {
+                this.data.historico.vendas.push({
+                    id: Date.now() + Math.floor(Math.random() * 1000),
+                    data: agoraIso,
+                    produto: produto || 'Venda Registrada',
+                    custo: valorCusto,
+                    valorVenda: valorTotal,
+                    valor: valorTotal,
+                    lucro: lucroLiquido,
+                    tipo: tipo || 'venda',
+                    caixaDestino: caixaDestino || 'caixaSecundario',
+                    cliente: cliente || 'Não Identificado'
+                });
+            }
+        }
+
         this.data._ultimoSaveLocal = Date.now();
-        this.saveData();
-        if (this.supabase) this.salvarSupabase();
+        if (!this._emLotePagamento) {
+            this.saveData();
+            if (typeof this.salvarNuvemCloudflare === 'function') {
+                this.salvarNuvemCloudflare();
+            }
+            if (typeof UI !== 'undefined' && typeof UI._renderGraficoVendas === 'function' && document.getElementById('grafico-vendas')) {
+                UI._renderGraficoVendas();
+            }
+            if (this.supabase) this.salvarSupabase();
+        }
         return { sucesso: true };
     }
 
@@ -3396,7 +3939,6 @@ class DataManager {
                 this.data.financeiro.caixaPrincipal = Math.max(0, (this.data.financeiro.caixaPrincipal || 0) - valVenda);
             } else {
                 this.data.financeiro.caixaSecundario = Math.max(0, (this.data.financeiro.caixaSecundario || 0) - valVenda);
-                this.data.financeiro.caixaPrincipal = Math.max(0, (this.data.financeiro.caixaPrincipal || 0) - valVenda);
             }
         }
 
@@ -3425,19 +3967,29 @@ class DataManager {
             }
         }
 
+        if (!Array.isArray(this.data._idsEstornados)) this.data._idsEstornados = [];
+
         // 4. Remover das movimentações do caixa
         if (this.data.movimentacoesCaixa) {
             const idxMov = this.data.movimentacoesCaixa.findIndex(m => matchItem(m.descricao || m.motivo, m.valor, m.data));
             if (idxMov !== -1) {
-                this.data.movimentacoesCaixa.splice(idxMov, 1);
+                const movRem = this.data.movimentacoesCaixa.splice(idxMov, 1)[0];
+                if (movRem) {
+                    const kMov = String(movRem.id || `${(movRem.data || '').substring(0, 16)}_${movRem.tipo || ''}_${movRem.valor || 0}_${(movRem.descricao || '').substring(0, 25)}`);
+                    this.data._idsEstornados.push(kMov);
+                }
             }
         }
 
         // 5. Remover do histórico de vendas e devolver ao estoque se aplicável
         if (this.data.historico && this.data.historico.vendas) {
-            const idxVenda = this.data.historico.vendas.findIndex(v => matchItem(v.produto, v.valorVenda || v.valor, v.data));
+            const idxVenda = this.data.historico.vendas.findIndex(v => matchItem(v.produto, v.valorVenda || v.liquido || v.valorBruto || v.valor, v.data));
             if (idxVenda !== -1) {
                 const vendaRemovida = this.data.historico.vendas.splice(idxVenda, 1)[0];
+                if (vendaRemovida) {
+                    const kVenda = String(vendaRemovida.id || `${(vendaRemovida.data || '').substring(0, 16)}_${vendaRemovida.produto || ''}_${vendaRemovida.valorVenda || vendaRemovida.liquido || vendaRemovida.valorBruto || vendaRemovida.valor || 0}`);
+                    this.data._idsEstornados.push(kVenda);
+                }
                 const prodNome = (vendaRemovida?.produto || '').toLowerCase();
                 if (prodNome) {
                     const cel = (this.data.estoqueCelulares || []).find(c => c.nome && prodNome.includes(c.nome.toLowerCase()));
@@ -3499,7 +4051,7 @@ class DataManager {
             prod.quantidade = 0;
             prod.status = 'vendido';
         }
-        this.data.historico.vendas.push({ data: new Date().toISOString(), produto: prod.nome, custo: prod.custo, valorVenda, lucro, tipo: 'acessorio', cliente: cliente || 'Não Identificado', caixaDestino });
+        this.data.historico.vendas.push({ id: this._gerarIdUnico('vnd'), data: new Date().toISOString(), produto: prod.nome, custo: prod.custo, valorVenda, lucro, tipo: 'acessorio', cliente: cliente || 'Não Identificado', caixaDestino });
         
         this._registrarSincronizacaoFinanceira({
             tipo: 'venda_acessorio',
@@ -3519,7 +4071,7 @@ class DataManager {
         const custos = this.data.precoPelicula.custosReais;
         const custo = custos[tipoPelicula] || custos.hd_hidrogel || 5;
         const lucro = preco - custo;
-        this.data.historico.vendas.push({ data: new Date().toISOString(), produto: `Película ${tipo} (${tipoPelicula}) — ${modelo}`, custo, valorVenda: preco, lucro, tipo: 'pelicula', cliente: cliente || 'Não Identificado', caixaDestino });
+        this.data.historico.vendas.push({ id: this._gerarIdUnico('pel'), data: new Date().toISOString(), produto: `Película ${tipo} (${tipoPelicula}) — ${modelo}`, custo, valorVenda: preco, lucro, tipo: 'pelicula', cliente: cliente || 'Não Identificado', caixaDestino });
         
         this._registrarSincronizacaoFinanceira({
             tipo: 'venda_pelicula',
@@ -3621,6 +4173,7 @@ class DataManager {
             if (!jaExisteVenda) {
                 const lucroOS = Math.max(0, valorTotalOS - custoPecaOS);
                 this.data.historico.vendas.push({
+                    id: this._gerarIdUnico('os'),
                     data: new Date().toISOString(),
                     produto: `Conserto ${idOSPadronizado}: ${os.servico || 'Serviço'} — ${os.modelo}`,
                     custo: custoPecaOS,
@@ -3662,18 +4215,30 @@ class DataManager {
 
         const idOSPadronizado = `OS #${String(numero).padStart(3, '0')}`;
         const idOSCurto = `OS #${numero}`;
+        if (!Array.isArray(this.data._idsEstornados)) this.data._idsEstornados = [];
+        this.data._idsEstornados.push('OS_' + numero);
 
-        // Remover do histórico de vendas
+        // Remover do histórico de vendas (e registrar em _idsEstornados para não ressurgir no sync)
         if (this.data.historico && Array.isArray(this.data.historico.vendas)) {
-            this.data.historico.vendas = this.data.historico.vendas.filter(v => 
-                !(v.produto || '').includes(idOSPadronizado) && !(v.produto || '').includes(idOSCurto)
-            );
+            this.data.historico.vendas = this.data.historico.vendas.filter(v => {
+                const match = (v.produto || '').includes(idOSPadronizado) || (v.produto || '').includes(idOSCurto);
+                if (match && v) {
+                    const kV = String(v.id || `${(v.data || '').substring(0, 16)}_${v.produto || ''}_${v.valorVenda || v.liquido || v.valorBruto || v.valor || 0}`);
+                    this.data._idsEstornados.push(kV);
+                }
+                return !match;
+            });
         }
-        // Remover das movimentações de caixa
+        // Remover das movimentações de caixa (e registrar em _idsEstornados)
         if (this.data.movimentacoesCaixa && Array.isArray(this.data.movimentacoesCaixa)) {
-            this.data.movimentacoesCaixa = this.data.movimentacoesCaixa.filter(m => 
-                !(m.descricao || '').includes(idOSPadronizado) && !(m.descricao || '').includes(idOSCurto)
-            );
+            this.data.movimentacoesCaixa = this.data.movimentacoesCaixa.filter(m => {
+                const match = (m.descricao || '').includes(idOSPadronizado) || (m.descricao || '').includes(idOSCurto);
+                if (match && m) {
+                    const kM = String(m.id || `${(m.data || '').substring(0, 16)}_${m.tipo || ''}_${m.valor || 0}_${(m.descricao || '').substring(0, 25)}`);
+                    this.data._idsEstornados.push(kM);
+                }
+                return !match;
+            });
         }
         // Remover da divisão de lucros
         if (this.data.divisaoLucro && Array.isArray(this.data.divisaoLucro.historicoDivisao)) {
@@ -3892,14 +4457,18 @@ class DataManager {
 
     // ===== GETTERS =====
     getFinanceiro() {
-        const f = this.data.financeiro;
-        if (f) {
-            const somaSubCaixas = (f.caixaSecundario || 0) + (f.caixaTerciario || 0) + (f.caixaAcessorios || 0) + (f.caixaAssistencia || 0);
-            if (f.caixaPrincipal < somaSubCaixas) {
-                f.caixaPrincipal = somaSubCaixas;
-            }
+        if (!this.data.financeiro) {
+            this.data.financeiro = {
+                caixaPrincipal: 0,
+                caixaSecundario: 0,
+                caixaTerciario: 0,
+                caixaFogos: 0,
+                caixaAcessorios: 0,
+                caixaAssistencia: 0,
+                reservaEmergencia: 0
+            };
         }
-        return f;
+        return this.data.financeiro;
     }
     getMeta() { return this.data.meta; }
 
@@ -3930,8 +4499,9 @@ class DataManager {
         if (!this.data.financeiro) this.data.financeiro = {};
         if (formaPagamento === 'dinheiro') {
             this.data.financeiro.caixaSecundario = (this.data.financeiro.caixaSecundario || 0) + val;
+        } else {
+            this.data.financeiro.caixaPrincipal = (this.data.financeiro.caixaPrincipal || 0) + val;
         }
-        this.data.financeiro.caixaPrincipal = (this.data.financeiro.caixaPrincipal || 0) + val;
 
         if (!this.data.movimentacoesCaixa) this.data.movimentacoesCaixa = [];
         this.data.movimentacoesCaixa.push({
@@ -4263,7 +4833,12 @@ class DataManager {
         if (!this.data.historico || !this.data.historico.vendas) return { sucesso: false };
         if (index >= 0 && index < this.data.historico.vendas.length) {
             const removida = this.data.historico.vendas.splice(index, 1)[0];
-            
+            if (!Array.isArray(this.data._idsEstornados)) this.data._idsEstornados = [];
+            if (removida) {
+                const kVenda = String(removida.id || `${(removida.data || '').substring(0, 16)}_${removida.produto || ''}_${removida.valorVenda || removida.liquido || removida.valorBruto || removida.valor || 0}`);
+                this.data._idsEstornados.push(kVenda);
+            }
+
             // 1. Devolver item ao estoque se for celular ou acessório
             if (removida.produto) {
                 const prodNome = (removida.produto || '').toLowerCase();
@@ -4280,19 +4855,27 @@ class DataManager {
                 }
             }
 
-            // 2. Estornar da movimentação de caixa e dos caixas operacionais
+            // 2. Estornar da movimentação de caixa e do caixa operacional correto
             if (this.data.movimentacoesCaixa) {
                 const idxMov = this.data.movimentacoesCaixa.findIndex(m => m.descricao && removida.produto && m.descricao.includes(removida.produto) && Math.abs(m.valor - (removida.valorVenda || removida.liquido || 0)) < 0.01);
                 if (idxMov !== -1) {
                     const mov = this.data.movimentacoesCaixa.splice(idxMov, 1)[0];
-                    if (mov.caixa === 'caixaSecundario' && this.data.financeiro) {
-                        this.data.financeiro.caixaSecundario = Math.max(0, (this.data.financeiro.caixaSecundario || 0) - (mov.valor || 0));
+                    if (mov) {
+                        const kMov = String(mov.id || `${(mov.data || '').substring(0, 16)}_${mov.tipo || ''}_${mov.valor || 0}_${(mov.descricao || '').substring(0, 25)}`);
+                        this.data._idsEstornados.push(kMov);
                     }
-                    if (this.data.financeiro) {
-                        this.data.financeiro.caixaPrincipal = Math.max(0, (this.data.financeiro.caixaPrincipal || 0) - (mov.valor || 0));
+                    if (mov && this.data.financeiro) {
+                        if (mov.caixa === 'caixaSecundario') {
+                            this.data.financeiro.caixaSecundario = Math.max(0, (this.data.financeiro.caixaSecundario || 0) - (mov.valor || 0));
+                        } else if (mov.caixa === 'caixaFogos') {
+                            this.data.financeiro.caixaFogos = Math.max(0, (this.data.financeiro.caixaFogos || 0) - (mov.valor || 0));
+                        } else if (mov.caixa === 'caixaPrincipal') {
+                            this.data.financeiro.caixaPrincipal = Math.max(0, (this.data.financeiro.caixaPrincipal || 0) - (mov.valor || 0));
+                        }
                     }
                 }
             }
+            this.data._ultimoSaveLocal = Date.now();
             this.saveData();
             return { sucesso: true, removida };
         }
@@ -4303,6 +4886,12 @@ class DataManager {
         if (!this.data.movimentacoesCaixa) return { sucesso: false };
         if (index >= 0 && index < this.data.movimentacoesCaixa.length) {
             const removida = this.data.movimentacoesCaixa.splice(index, 1)[0];
+            if (!Array.isArray(this.data._idsEstornados)) this.data._idsEstornados = [];
+            if (removida) {
+                const kMov = String(removida.id || `${(removida.data || '').substring(0, 16)}_${removida.tipo || ''}_${removida.valor || 0}_${(removida.descricao || '').substring(0, 25)}`);
+                this.data._idsEstornados.push(kMov);
+            }
+            this.data._ultimoSaveLocal = Date.now();
             this.saveData();
             return { sucesso: true, removida };
         }
@@ -4501,11 +5090,9 @@ class DataManager {
     // ===== AUDITORIA E RECÁLCULO DA COMISSÃO DE ILANNA (BASEADO EM VENDAS REAIS) =====
     calcularComissaoIlannaReal(mesAnoPrefix = null) {
         if (!this.data) return 0;
+        this.reconciliarFinanceiroCicloAtual(this.data);
         if (!mesAnoPrefix) {
-            const now = new Date();
-            const ano = now.getFullYear();
-            const mes = String(now.getMonth() + 1).padStart(2, '0');
-            mesAnoPrefix = `${ano}-${mes}`;
+            mesAnoPrefix = this.hojeLocal().substring(0, 7);
         }
         let totalComissao = 0;
 
@@ -4513,24 +5100,24 @@ class DataManager {
         if (this.data.historico && Array.isArray(this.data.historico.vendas)) {
             this.data.historico.vendas.forEach(v => {
                 if (v._cicloMetaFechado) return;
-                const dataYMD = (v.data || '').substring(0, 10);
+                const dataYMD = this._extrairDataYMD(v.data);
                 if (dataInicioCiclo && dataYMD < dataInicioCiclo) return;
-                const dt = (v.data || '').substring(0, 7);
+                const dt = dataYMD.substring(0, 7);
                 if (dt === mesAnoPrefix || (dataInicioCiclo && dataYMD >= dataInicioCiclo)) {
                     const prod = (v.produto || '').toLowerCase();
                     const tipo = (v.tipo || '').toLowerCase();
                     const isFogos = tipo === 'fogos' || prod.includes('fogo') || prod.includes('19x4') || prod.includes('12x1') || prod.includes('foguete');
                     
                     if (!isFogos) {
-                        const val = parseFloat(v.valorVenda || v.valor || v.valorTotal || 0);
-                        const isCelular = tipo === 'celular' || tipo === 'avista' || tipo === 'parcelado_maquina' || tipo === 'pix' || prod.includes('iphone') || prod.includes('samsung') || prod.includes('xiaomi') || prod.includes('motorola') || prod.includes('redmi');
+                        const val = parseFloat(v.valorVenda || v.liquido || v.valorBruto || v.valor || v.valorTotal || 0);
+                        const isCelular = tipo === 'celular' || tipo === 'avista' || tipo === 'parcelado_maquina' || tipo === 'pix' || prod.includes('iphone') || prod.includes('samsung') || prod.includes('xiaomi') || prod.includes('motorola') || prod.includes('redmi') || prod.includes('realme');
                         
                         if (isCelular) {
                             totalComissao += Math.round(val * 0.03 * 100) / 100;
                         } else {
                             const custo = parseFloat(v.custo || v.custoPeca || 0);
                             let lucro = parseFloat(v.lucro !== undefined ? v.lucro : (val - custo));
-                            if (isNaN(lucro) || lucro < 0) lucro = val;
+                            if (isNaN(lucro) || lucro < 0) lucro = 0;
                             totalComissao += Math.round(lucro * 100) / 100;
                         }
                     }

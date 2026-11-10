@@ -126,8 +126,27 @@ UI._confirmarAdicao = function () {
     const caixa = document.getElementById('add-caixa').value;
     const valor = parseFloat(document.getElementById('add-valor').value);
     const motivo = document.getElementById('add-motivo').value;
-    const obs = document.getElementById('add-obs')?.value || '';
+    const obs = (document.getElementById('add-obs')?.value || '').trim();
     if (!valor || valor <= 0) return UI.toast('Digite um valor válido', 'error');
+
+    // Se for Venda Manual com nome de produto na observação, verificar match no estoque e registrar venda completa
+    if (motivo.toLowerCase() === 'venda manual' && obs.length >= 3 && typeof dataManager.venderCarrinho === 'function') {
+        const match = typeof dataManager.buscarMatchEstoqueInteligente === 'function' ? dataManager.buscarMatchEstoqueInteligente(obs) : null;
+        dataManager.venderCarrinho(
+            [{ nome: obs, valor, precoVenda: valor, precoFinal: valor, custo: match?.prod?.custo || 0, tipo: 'avulso' }],
+            [{ valor, caixa, forma: caixa === 'caixaSecundario' ? 'dinheiro' : 'pix' }],
+            'Venda Manual Caixa'
+        );
+        UI.closeModal();
+        if (match && match.prod) {
+            UI.toast(`🎯 Venda manual vinculada ao estoque: "${match.prod.nome}" abatido + ${UI.R(valor)} no caixa!`, 'success');
+        } else {
+            UI.toast(`✅ Venda manual de ${UI.R(valor)} registrada no caixa!`, 'success');
+        }
+        UI.render();
+        return;
+    }
+
     if (dataManager.data.financeiro[caixa] === undefined) dataManager.data.financeiro[caixa] = 0;
     dataManager.data.financeiro[caixa] += valor;
     if (!dataManager.data.movimentacoesCaixa) dataManager.data.movimentacoesCaixa = [];
@@ -857,8 +876,18 @@ UI.renderFinanceiro = function () {
     // Apuração Geral de DRE Sincronizada com Caixas Reais
     // Apuração Geral de DRE Sincronizada com Transações Reais (Sem alucinação por saldo de gaveta)
     const vendasHist = dataManager.data.historico?.vendas || [];
-    let totalReceitaBruta = vendasHist.reduce((s, v) => s + (v.valorVenda || v.valorBruto || v.liquido || v.valor || 0), 0);
-    const receitaMovs = movs.filter(m => m.tipo === 'conserto' || m.tipo === 'os_concluida' || m.tipo === 'os_entrada').reduce((s, m) => s + (m.valor || 0), 0);
+    const osJaNaVenda = new Set();
+    let totalReceitaBruta = vendasHist.reduce((s, v) => {
+        const osN = typeof dataManager._getOSNumero === 'function' ? dataManager._getOSNumero(v.produto) : '';
+        if (osN) osJaNaVenda.add(osN);
+        return s + (v.valorVenda || v.valorBruto || v.liquido || v.valor || 0);
+    }, 0);
+    const receitaMovs = movs.filter(m => {
+        if (m.tipo !== 'conserto' && m.tipo !== 'os_concluida' && m.tipo !== 'os_entrada') return false;
+        const osN = typeof dataManager._getOSNumero === 'function' ? dataManager._getOSNumero(m.descricao || m.motivo) : '';
+        if (osN && osJaNaVenda.has(osN)) return false;
+        return true;
+    }).reduce((s, m) => s + (m.valor || 0), 0);
     totalReceitaBruta += receitaMovs;
 
     const totalCMV = vendasHist.reduce((s, v) => s + (v.custo || 0), 0) || (fundoCusto.totalAcumulado || 0);
