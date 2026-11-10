@@ -189,6 +189,7 @@ console.log('✅ [PASSOU] Duas vendas manuais idênticas (25+25) + venda multi (
 
 console.log('\n=== TESTE 6: UI._estoqueVender SEM BAIXA DUPLA & IARecaptura NO VENDEDOR ===');
 vm.runInContext(fs.readFileSync('js/ui-estoque.js', 'utf8'), sandbox);
+vm.runInContext(fs.readFileSync('js/ia-recaptura-mensagens.js', 'utf8'), sandbox);
 vm.runInContext(fs.readFileSync('js/ui-ia-recaptura.js', 'utf8'), sandbox);
 dm.data.estoqueAcessorios = [{ id: 'ac_99', nome: 'Capa Silicone', custo: 8, precoVenda: 35, quantidade: 5, status: 'disponivel' }];
 dm.data.estoqueCelulares = [{ id: 'cel_99', nome: 'iPhone Teste', custo: 1500, precoVenda: 2200, quantidade: 1, status: 'disponivel' }];
@@ -300,5 +301,52 @@ if (Math.abs(dm.data.financeiro.caixaPrincipal - 1274.29) > 0.01 || Math.abs(dm.
 }
 console.log('✅ [PASSOU] Seed inicial respeitou saldos da nuvem (CP=1274.29, CS=128.00) sem ressuscitar 5917.14!');
 
-console.log('\n=== TODOS OS TESTES ESPECÍFICOS DE GRÁFICO, FECHAMENTO E SYNC PASSARAM COM SUCESSO! ===');
-setTimeout(() => process.exit(0), 50);
+console.log('\n=== TESTE 10: SEGMENTAÇÃO BLACK CESINHA, PAGINAÇÃO (>35) E PROXY GEMINI ===');
+(async () => {
+    vm.runInContext(fs.readFileSync('js/ui-ia-sugestoes.js', 'utf8'), sandbox);
+    dm.data.clientes = [
+        { nome: 'Marcos', telefone: '75999001122', historico: [{ data: '2026-08-10', produto: 'Venda Avulsa: Capinha Case azul G34', valor: 30 }] },
+        { nome: 'Everaldo', telefone: '75999001133', historico: [{ data: '2026-08-11', produto: 'Avulso: Fogos 19x4', valor: 60 }] },
+        { nome: 'cliente 09', telefone: '75999001144', historico: [] },
+        { nome: 'MISIONARIA', telefone: '75999001155', historico: [] }
+    ];
+    for (let i = 0; i < 40; i++) {
+        dm.data.clientes.push({ nome: `Ana Teste ${i}`, telefone: `7598800${String(1000 + i)}`, historico: [{ data: '2026-09-01', produto: 'Película cerâmica', valor: 25 }] });
+    }
+    dm.data.historico.vendas = [{ data: '2026-11-06T12:00:00Z', cliente: 'MISIONARIA', produto: 'Avulso: Aparelho celular do Note 70', valorVenda: 998 }];
+    const lista = sandbox.IARecaptura.gerarListaRecaptura();
+    const marcos = lista.find(c => c.nome === 'Marcos');
+    const everaldo = lista.find(c => c.nome === 'Everaldo');
+    const cli09 = lista.find(c => c.nome === 'cliente 09');
+    const misionaria = lista.find(c => c.nome === 'MISIONARIA');
+    if (marcos.categoria !== 'acessorio' || /capinha|tá usando|trocou/i.test(marcos.msgQuebraGelo) || !/Black Cesinha/i.test(marcos.msgQuebraGelo)) {
+        console.error('❌ [FALHOU] Segmentação/Msg Capinha incorreta:', marcos.categoria, marcos.msgQuebraGelo);
+        process.exit(1);
+    }
+    if (everaldo.categoria !== 'fogos' || /fogos|tá usando|trocou/i.test(everaldo.msgQuebraGelo)) {
+        console.error('❌ [FALHOU] Cliente fogos vazou ou teve texto indevido:', everaldo.categoria, everaldo.msgQuebraGelo);
+        process.exit(1);
+    }
+    if (/Amigo\(a\)|\*Cliente\*/i.test(cli09.msgQuebraGelo)) {
+        console.error('❌ [FALHOU] Saudação robótica em nome genérico:', cli09.msgQuebraGelo);
+        process.exit(1);
+    }
+    if (!misionaria || misionaria.categoria !== 'celular' || misionaria.totalGasto !== 998) {
+        console.error('❌ [FALHOU] Falhou cruzamento de venda sem c.historico:', misionaria);
+        process.exit(1);
+    }
+    let chamadoUrl = '';
+    sandbox.fetch = async (u) => { chamadoUrl = u; return { ok: true, json: async () => ({ ok: true, text: 'Oi Marcos, lista VIP Black Cesinha!' }) }; };
+    const rGem = await sandbox.IAGuardian.chamarGemini('teste');
+    if (!chamadoUrl.includes('/api/gemini') || !rGem.includes('Black Cesinha')) {
+        console.error('❌ [FALHOU] Proxy Gemini não acionado corretamente:', chamadoUrl, rGem);
+        process.exit(1);
+    }
+    if (sandbox.IARecaptura.limiteExibicao <= 35 && sandbox.IARecaptura.carregarMais(50) === undefined && sandbox.IARecaptura.limiteExibicao < 90) {
+        console.error('❌ [FALHOU] Paginação não expandiu:', sandbox.IARecaptura.limiteExibicao);
+        process.exit(1);
+    }
+    console.log('✅ [PASSOU] Segmentação Black Cesinha, nome genérico, cruzamento vendas->cliente, paginação (>35) e proxy Gemini OK!');
+    console.log('\n=== TODOS OS TESTES ESPECÍFICOS DE GRÁFICO, FECHAMENTO E SYNC PASSARAM COM SUCESSO! ===');
+    setTimeout(() => process.exit(0), 50);
+})().catch(e => { console.error(e); process.exit(1); });

@@ -3,8 +3,15 @@
 
 const IAGuardian = {
     ultimoRelatorio: null,
+    nuvemGeminiAtiva: null,
     _timer: null,
 
+    getGeminiProxyUrl() {
+        if (typeof window !== 'undefined' && window.location && window.location.hostname.endsWith('cesinha-acessorios.pages.dev')) {
+            return '/api/gemini';
+        }
+        return 'https://cesinha-acessorios.pages.dev/api/gemini';
+    },
     getApiKey() {
         try { return localStorage.getItem('strategyos_gemini_api_key') || ''; } catch (e) { return ''; }
     },
@@ -16,6 +23,45 @@ const IAGuardian = {
             return true;
         } catch (e) { return false; }
     },
+    async verificarStatusNuvem() {
+        try {
+            const res = await fetch(this.getGeminiProxyUrl(), { method: 'GET' });
+            const json = await res.json();
+            this.nuvemGeminiAtiva = Boolean(res.ok && json && json.configured);
+        } catch (e) {
+            this.nuvemGeminiAtiva = false;
+        }
+        const badge = document.getElementById('ia-gemini-status-pill');
+        if (badge && !this.getApiKey()) {
+            badge.style.color = this.nuvemGeminiAtiva ? '#10b981' : '#f59e0b';
+            badge.textContent = this.nuvemGeminiAtiva ? '🟢 API Google Conectada (Nuvem Segura)' : '🟡 Modo Local Ativo (Conecte ou cole Key)';
+        }
+        return this.nuvemGeminiAtiva;
+    },
+    async chamarGemini(prompt, opts = {}) {
+        const localKey = this.getApiKey();
+        const model = opts.model || 'gemini-2.5-flash';
+        const generationConfig = { temperature: opts.temperature ?? 0.35, maxOutputTokens: opts.maxOutputTokens ?? 600 };
+        if (localKey) {
+            const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-goog-api-key': localKey },
+                body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig })
+            });
+            const j = await resp.json();
+            if (!resp.ok) throw new Error(j?.error?.message || `HTTP ${resp.status}`);
+            return (j?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+        }
+        const resp = await fetch(this.getGeminiProxyUrl(), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt, model, ...generationConfig })
+        });
+        const j = await resp.json();
+        if (!resp.ok || !j?.ok) throw new Error(j?.error || `HTTP ${resp.status}`);
+        this.nuvemGeminiAtiva = true;
+        return String(j.text || '').trim();
+    },
 
     // Auditoria determinística instantânea (roda continuamente sem custo de token e sem depender de internet)
     executarAuditoriaContinua() {
@@ -25,68 +71,36 @@ const IAGuardian = {
         const celulares = (dataManager.getEstoqueCelulares() || []).filter(p => p.status !== 'vendido' && (p.quantidade === undefined || p.quantidade > 0));
         const acessorios = (dataManager.getEstoqueAcessorios() || []).filter(p => p.status !== 'vendido' && (p.quantidade === undefined || p.quantidade > 0));
         const procurados = typeof dataManager.getProdutosProcurados === 'function' ? dataManager.getProdutosProcurados() : [];
+        const anomalias = [], oportunidades = [], avulsosPendentesBaixa = [];
 
-        const anomalias = [];
-        const oportunidades = [];
-        const avulsosPendentesBaixa = [];
-
-        // 1. Verificar se alguma venda "Avulso:" recente corresponde a um item ainda disponível no estoque
         vendas.slice(-40).forEach((v, idx) => {
             const nomeProd = String(v.produto || '');
             if ((nomeProd.toLowerCase().startsWith('avulso:') || v.tipo === 'avulso') && !v._reconciliadoEstoque) {
                 const termoLimpo = nomeProd.replace(/^avulso:\s*/i, '').replace(/\(\d+\s*itens?\)$/i, '').trim();
-                const match = typeof dataManager.buscarMatchEstoqueInteligente === 'function'
-                    ? dataManager.buscarMatchEstoqueInteligente(termoLimpo)
-                    : null;
+                const match = typeof dataManager.buscarMatchEstoqueInteligente === 'function' ? dataManager.buscarMatchEstoqueInteligente(termoLimpo) : null;
                 if (match && match.prod) {
-                    avulsosPendentesBaixa.push({
-                        vendaId: v.id || idx,
-                        data: v.data,
-                        digitado: termoLimpo,
-                        prodId: match.prod.id,
-                        prodNome: match.prod.nome,
-                        origemLista: match.origemLista
-                    });
+                    avulsosPendentesBaixa.push({ vendaId: v.id || idx, data: v.data, digitado: termoLimpo, prodId: match.prod.id, prodNome: match.prod.nome, origemLista: match.origemLista });
                 }
             }
         });
-
         if (avulsosPendentesBaixa.length > 0) {
-            anomalias.push({
-                nivel: 'critico',
-                titulo: `${avulsosPendentesBaixa.length} venda(s) avulsa(s) batem com produto ainda ativo no estoque`,
-                detalhe: avulsosPendentesBaixa.map(a => `"${a.digitado}" ➔ Estoque: ${a.prodNome}`).join(' | '),
-                acao: 'reconciliar_avulsos'
-            });
+            anomalias.push({ nivel: 'critico', titulo: `${avulsosPendentesBaixa.length} venda(s) avulsa(s) batem com produto ainda ativo no estoque`, detalhe: avulsosPendentesBaixa.map(a => `"${a.digitado}" ➔ Estoque: ${a.prodNome}`).join(' | '), acao: 'reconciliar_avulsos' });
         }
 
-        // 2. Produtos no estoque com custo zerado ou preço de venda abaixo do custo
         const semCustoOuPrejuizo = [...celulares, ...acessororiosSafe(acessorios)].filter(p => !p.custo || p.custo <= 0 || (p.precoVenda > 0 && p.precoVenda <= p.custo));
         if (semCustoOuPrejuizo.length > 0) {
-            anomalias.push({
-                nivel: 'importante',
-                titulo: `${semCustoOuPrejuizo.length} item(ns) no estoque sem custo ou com margem negativa`,
-                detalhe: semCustoOuPrejuizo.slice(0, 5).map(p => `${p.nome} (Custo: R$ ${p.custo || 0} / Venda: R$ ${p.precoVenda || 0})`).join(', ')
-            });
+            anomalias.push({ nivel: 'importante', titulo: `${semCustoOuPrejuizo.length} item(ns) no estoque sem custo ou com margem negativa`, detalhe: semCustoOuPrejuizo.slice(0, 5).map(p => `${p.nome} (Custo: R$ ${p.custo || 0} / Venda: R$ ${p.precoVenda || 0})`).join(', ') });
         }
 
-        // 3. Cruzamento automático: Produtos Procurados que JÁ ESTÃO disponíveis no estoque!
         procurados.forEach(proc => {
-            const match = typeof dataManager.buscarMatchEstoqueInteligente === 'function'
-                ? dataManager.buscarMatchEstoqueInteligente(proc.nome)
-                : null;
-            if (match && match.prod) {
-                oportunidades.push(`🎯 Demanda Atendida: Cliente procurou "${proc.nome}" e temos "${match.prod.nome}" disponível no estoque (${UI.R(match.prod.precoVenda)})!`);
-            }
+            const match = typeof dataManager.buscarMatchEstoqueInteligente === 'function' ? dataManager.buscarMatchEstoqueInteligente(proc.nome) : null;
+            if (match && match.prod) oportunidades.push(`🎯 Demanda Atendida: Cliente procurou "${proc.nome}" e temos "${match.prod.nome}" disponível no estoque (${UI.R(match.prod.precoVenda)})!`);
         });
 
-        // 4. Aparelhos parados > 45 dias e estoque baixo
         const parados = celulares.filter(p => p.dataCompra && Math.floor((Date.now() - new Date(p.dataCompra).getTime()) / 86400000) > 45);
-        if (parados.length > 0) {
-            oportunidades.push(`⏳ Giro Lento: ${parados.length} aparelho(s) há mais de 45 dias no estoque (${parados.slice(0, 4).map(p => p.nome).join(', ')}). Sugestão: criar oferta relâmpago.`);
-        }
+        if (parados.length > 0) oportunidades.push(`⏳ Giro Lento: ${parados.length} aparelho(s) há mais de 45 dias no estoque (${parados.slice(0, 4).map(p => p.nome).join(', ')}). Sugestão: criar oferta relâmpago.`);
 
-        const relatorio = {
+        this.ultimoRelatorio = {
             timestamp: new Date().toISOString(),
             totalVendas: vendas.length,
             celularesAtivos: celulares.length,
@@ -96,8 +110,7 @@ const IAGuardian = {
             avulsosPendentesBaixa,
             saudeScore: Math.max(0, 100 - (avulsosPendentesBaixa.length * 15) - (semCustoOuPrejuizo.length * 5))
         };
-        this.ultimoRelatorio = relatorio;
-        return relatorio;
+        return this.ultimoRelatorio;
     },
 
     reconciliarAvulsosDetectados() {
@@ -127,13 +140,7 @@ const IAGuardian = {
     },
 
     async consultarGeminiFlash() {
-        const apiKey = this.getApiKey();
         const outEl = document.getElementById('ia-gemini-output');
-        if (!apiKey) {
-            if (window.UI) UI.toast('Configure sua chave da API Gemini 2.5 Flash no campo acima primeiro!', 'warning');
-            document.getElementById('ia-gemini-key-input')?.focus();
-            return;
-        }
         if (outEl) {
             outEl.style.display = 'block';
             outEl.innerHTML = `<div style="padding:16px;color:#FFD700;font-weight:700;">⏳ Consultando Gemini 2.5 Flash em tempo real sobre seu estoque, vendas e caixa...</div>`;
@@ -147,45 +154,18 @@ const IAGuardian = {
             nome: p.nome, custo: p.custo, venda: p.precoVenda, qtd: p.quantidade || 1
         }));
 
-        const promptSistema = `Você é o Auditor Financeiro e Conselheiro de Estoque da loja de celulares "Cesinha Acessórios" (StrategyOS).
-Seja direto, cirúrgico e sem elogios. Analise os dados reais abaixo e responda em 4 blocos curtos (com bullet points):
-1. AUDITORIA DE ESTOQUE X VENDAS AVULSAS: aponte qualquer item vendido que pareça estar duplicado ou com nome divergente do estoque.
-2. MARGEM E PRECIFICAÇÃO: aponte os aparelhos do estoque com melhor margem e os que estão com risco de encalhe/prejuízo.
-3. AÇÃO IMEDIATA DE BALCÃO HOJE: 3 ações práticas para a funcionária vender mais hoje (combos, ofertas ou cobrança).
-4. ALERTA DE SEGURANÇA DO CAIXA: valide se os custos e lucros das últimas vendas são coerentes.
-
-DADOS REAIS DA LOJA AGORA:
-- Score Saúde Local: ${rel?.saudeScore}%
-- Anomalias Detectadas Localmente: ${JSON.stringify(rel?.anomalias || [])}
-- Estoque de Celulares Ativo (${estoqueResumo.length}): ${JSON.stringify(estoqueResumo.slice(0, 25))}
-- Últimas 15 Vendas: ${JSON.stringify(vendasHoje)}`;
+        const promptSistema = `Você é o Auditor Financeiro e Conselheiro de Estoque da loja "Cesinha Acessórios" (StrategyOS). Responda direto em 4 blocos curtos: 1) AUDITORIA ESTOQUE X AVULSAS 2) MARGEM E PRECIFICAÇÃO 3) 3 AÇÕES DE BALCÃO HOJE 4) SEGURANÇA DO CAIXA.
+DADOS REAIS: Saúde ${rel?.saudeScore}% | Anomalias: ${JSON.stringify(rel?.anomalias || [])} | Celulares (${estoqueResumo.length}): ${JSON.stringify(estoqueResumo.slice(0, 25))} | Últimas Vendas: ${JSON.stringify(vendasHoje)}`;
 
         try {
-            const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: promptSistema }] }],
-                    generationConfig: { temperature: 0.25, maxOutputTokens: 900 }
-                })
-            });
-            const json = await resp.json();
-            if (!resp.ok) throw new Error(json?.error?.message || `HTTP ${resp.status}`);
-            const texto = json?.candidates?.[0]?.content?.parts?.[0]?.text || 'Sem resposta da IA.';
-            const formatado = texto
-                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                .replace(/\*\*(.*?)\*\*/g, '<strong style="color:#00FFA3;">$1</strong>')
-                .replace(/\n/g, '<br>');
+            const texto = (await this.chamarGemini(promptSistema, { temperature: 0.25, maxOutputTokens: 900 })) || 'Sem resposta da IA.';
+            const formatado = texto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\*\*(.*?)\*\*/g, '<strong style="color:#00FFA3;">$1</strong>').replace(/\n/g, '<br>');
             if (outEl) {
-                outEl.innerHTML = `
-                    <div style="background:rgba(16,185,129,0.08);border:1.5px solid #10b981;border-radius:14px;padding:18px;font-size:14px;line-height:1.6;color:#fff;">
-                        <div style="font-size:12px;font-weight:900;color:#10b981;margin-bottom:8px;letter-spacing:1px;">⚡ PARECER AO VIVO — GEMINI 2.5 FLASH</div>
-                        ${formatado}
-                    </div>`;
+                outEl.innerHTML = `<div style="background:rgba(16,185,129,0.08);border:1.5px solid #10b981;border-radius:14px;padding:18px;font-size:14px;line-height:1.6;color:#fff;"><div style="font-size:12px;font-weight:900;color:#10b981;margin-bottom:8px;">⚡ PARECER AO VIVO — GOOGLE GEMINI 2.5 FLASH</div>${formatado}</div>`;
             }
         } catch (err) {
             if (outEl) {
-                outEl.innerHTML = `<div style="background:rgba(239,68,68,0.12);border:1px solid #ef4444;border-radius:12px;padding:14px;color:#fca5a5;font-size:13px;">❌ Falha ao consultar Gemini 2.5 Flash: ${err.message}. Verifique se sua API Key está ativa.</div>`;
+                outEl.innerHTML = `<div style="background:rgba(239,68,68,0.12);border:1px solid #ef4444;border-radius:12px;padding:14px;color:#fca5a5;font-size:13px;">❌ Falha ao consultar Gemini 2.5 Flash: ${err.message}.</div>`;
             }
         }
     },
@@ -263,18 +243,18 @@ UI.renderIASugestoes = function () {
             <div style="background:linear-gradient(135deg, rgba(16,185,129,0.10) 0%, rgba(59,130,246,0.10) 100%);border:1.5px solid rgba(16,185,129,0.4);border-radius:16px;padding:18px;margin-bottom:18px;">
                 <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
                     <h3 style="font-size:17px;margin:0;color:#00FFA3;">⚡ Motor Gemini 2.5 Flash + Auto-Estoque Inteligente</h3>
-                    <span style="font-size:12px;padding:4px 10px;border-radius:20px;background:rgba(0,0,0,0.4);color:${keySalva ? '#10b981' : '#f59e0b'};font-weight:700;">
-                        ${keySalva ? '🟢 API Key Conectada (Local Seguro)' : '🟡 Modo Local Ativo (Insira sua Key para IA Nuvem)'}
+                    <span id="ia-gemini-status-pill" style="font-size:12px;padding:4px 10px;border-radius:20px;background:rgba(0,0,0,0.4);color:${(keySalva || IAGuardian.nuvemGeminiAtiva !== false) ? '#10b981' : '#f59e0b'};font-weight:700;">
+                        ${keySalva ? '🟢 API Key Manual Ativa (Local)' : '🟢 API Google Conectada (Nuvem Segura)'}
                     </span>
                 </div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-                    <input type="password" id="ia-gemini-key-input" class="form-input" style="flex:1;min-width:220px;font-size:13px;" placeholder="Cole aqui sua API Key do Gemini 2.5 Flash (AIzaSy...)" value="${keySalva}">
-                    <button class="btn btn-ghost" onclick="IAGuardian.setApiKey(document.getElementById('ia-gemini-key-input').value);UI.toast('Chave Gemini 2.5 Flash salva localmente com segurança!','success');UI.renderIASugestoes();">💾 Salvar Key</button>
+                    <input type="password" id="ia-gemini-key-input" class="form-input" style="flex:1;min-width:220px;font-size:13px;" placeholder="Opcional: substituir pela sua própria API Key (já integrada no servidor)" value="${keySalva}">
+                    <button class="btn btn-ghost" onclick="IAGuardian.setApiKey(document.getElementById('ia-gemini-key-input').value);UI.toast('Configuração salva!','success');UI.renderIASugestoes();">💾 Salvar Key</button>
                     <button class="btn btn-primary" style="background:linear-gradient(45deg,#10b981,#059669);border:none;font-weight:800;" onclick="IAGuardian.consultarGeminiFlash()">🧠 Auditar Loja Agora com Gemini 2.5 Flash</button>
                     <button class="btn btn-ghost" style="border-color:#FFD700;color:#FFD700;font-weight:800;" onclick="IAGuardian.copiarCatalogoBlackWhatsApp()">🖤 Copiar Catálogo Black Friday (WhatsApp)</button>
                 </div>
                 <div style="font-size:12px;color:var(--text-muted);">
-                    🔒 Sua chave fica salva exclusivamente no navegador desta máquina (nunca vai para o GitHub). O vínculo automático de produtos avulsos (ex: digitar <em>"celular iphone 11"</em> e abater <em>"iPhone 11"</em> do estoque) já roda em tempo real em 100% das vendas!
+                    🔒 Motor Google Gemini 2.5 Flash pré-vinculado via servidor seguro Cloudflare (chave oculta do público/GitHub e ativa em qualquer celular da loja).
                 </div>
                 <div id="ia-gemini-output" style="display:none;margin-top:14px;"></div>
             </div>
@@ -325,6 +305,7 @@ UI.renderIASugestoes = function () {
                 </div>` : ''}
         </div>`;
     if (typeof IARecaptura !== 'undefined') setTimeout(() => IARecaptura.renderListaCards(), 20);
+    IAGuardian.verificarStatusNuvem();
 };
 
 UI._obterWidgetIACrossSelling = function (nomeItem) {
