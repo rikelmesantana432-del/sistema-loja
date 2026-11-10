@@ -126,7 +126,7 @@ const IARecaptura = {
             const prompt = window.IARecapturaMotor
                 ? IARecapturaMotor.montarPromptGemini(cli, this.etapaAtual, msgOriginal, this.getLinkGrupo())
                 : msgOriginal;
-            const textoGerado = await IAGuardian.chamarGemini(prompt, { temperature: 0.55, maxOutputTokens: 280 });
+            const textoGerado = await IAGuardian.chamarGemini(prompt, { temperature: 0.55, maxOutputTokens: 450 });
             txtEl.value = textoGerado || msgOriginal;
             if (window.UI) UI.toast('✨ Variação gerada com Google Gemini!', 'success');
         } catch (err) {

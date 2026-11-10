@@ -336,15 +336,46 @@ console.log('\n=== TESTE 10: SEGMENTAÇÃO BLACK CESINHA, PAGINAÇÃO (>35) E PR
         process.exit(1);
     }
     let chamadoUrl = '';
-    sandbox.fetch = async (u) => { chamadoUrl = u; return { ok: true, json: async () => ({ ok: true, text: 'Oi Marcos, lista VIP Black Cesinha!' }) }; };
+    let payloadEnviado = null;
+    sandbox.fetch = async (u, init) => {
+        chamadoUrl = u;
+        payloadEnviado = init && init.body ? JSON.parse(init.body) : null;
+        return { ok: true, json: async () => ({ ok: true, text: 'Oi Marcos, lista VIP Black Cesinha!' }) };
+    };
     const rGem = await sandbox.IAGuardian.chamarGemini('teste');
-    if (!chamadoUrl.includes('/api/gemini') || !rGem.includes('Black Cesinha')) {
-        console.error('❌ [FALHOU] Proxy Gemini não acionado corretamente:', chamadoUrl, rGem);
+    if (!chamadoUrl.includes('/api/gemini') || !rGem.includes('Black Cesinha') || payloadEnviado?.thinkingBudget !== 0) {
+        console.error('❌ [FALHOU] Proxy Gemini não acionado corretamente:', chamadoUrl, payloadEnviado, rGem);
         process.exit(1);
     }
     if (sandbox.IARecaptura.limiteExibicao <= 35 && sandbox.IARecaptura.carregarMais(50) === undefined && sandbox.IARecaptura.limiteExibicao < 90) {
         console.error('❌ [FALHOU] Paginação não expandiu:', sandbox.IARecaptura.limiteExibicao);
         process.exit(1);
+    }
+    const geminiFnMod = await import('./functions/api/gemini.js');
+    let upstreamPayload = null;
+    const prevFetch = globalThis.fetch;
+    globalThis.fetch = async (u, init) => {
+        upstreamPayload = JSON.parse(init.body);
+        return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+                candidates: [{ content: { parts: [{ thought: true, text: 'rascunho interno' }, { text: 'Resposta limpa Black Cesinha' }] }, finishReason: 'STOP' }]
+            })
+        };
+    };
+    try {
+        const fnResp = await geminiFnMod.onRequestPost({
+            env: { GEMINI_API_KEY: 'dummy-test-only' },
+            request: { json: async () => ({ prompt: 'Oi', model: 'gemini-2.5-flash', maxOutputTokens: 350 }) }
+        });
+        const fnJson = await fnResp.json();
+        if (!fnJson.ok || fnJson.text !== 'Resposta limpa Black Cesinha' || upstreamPayload?.generationConfig?.thinkingConfig?.thinkingBudget !== 0) {
+            console.error('❌ [FALHOU] Handler /api/gemini falhou no thinkingBudget ou filtro thought:', fnJson, upstreamPayload);
+            process.exit(1);
+        }
+    } finally {
+        globalThis.fetch = prevFetch;
     }
     console.log('✅ [PASSOU] Segmentação Black Cesinha, nome genérico, cruzamento vendas->cliente, paginação (>35) e proxy Gemini OK!');
     console.log('\n=== TODOS OS TESTES ESPECÍFICOS DE GRÁFICO, FECHAMENTO E SYNC PASSARAM COM SUCESSO! ===');

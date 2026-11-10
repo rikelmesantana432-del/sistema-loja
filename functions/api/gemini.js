@@ -67,11 +67,17 @@ export async function onRequestPost(context) {
 
         const rawGen = body.generationConfig || {};
         const tempNum = Number(body.temperature ?? rawGen.temperature ?? 0.45);
-        const maxTok = Number(body.maxOutputTokens ?? rawGen.maxOutputTokens ?? 600);
+        const maxTok = Number(body.maxOutputTokens ?? rawGen.maxOutputTokens ?? 800);
         const generationConfig = {
             temperature: Number.isFinite(tempNum) ? Math.min(Math.max(tempNum, 0), 1.5) : 0.45,
-            maxOutputTokens: Number.isFinite(maxTok) ? Math.min(Math.max(Math.round(maxTok), 32), 2048) : 600
+            maxOutputTokens: Number.isFinite(maxTok) ? Math.min(Math.max(Math.round(maxTok), 120), 2048) : 800
         };
+        if (model.startsWith('gemini-2.5')) {
+            const rawBudget = Number(body.thinkingBudget ?? rawGen?.thinkingConfig?.thinkingBudget);
+            generationConfig.thinkingConfig = {
+                thinkingBudget: Number.isFinite(rawBudget) ? Math.min(Math.max(Math.round(rawBudget), 0), 1024) : 0
+            };
+        }
 
         const upstream = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
@@ -91,8 +97,19 @@ export async function onRequestPost(context) {
             return jsonResponse({ ok: false, error: errMsg }, upstream.status);
         }
 
-        const text = upstreamJson?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const parts = upstreamJson?.candidates?.[0]?.content?.parts || [];
+        const text = parts
+            .filter(p => !p.thought && typeof p.text === 'string')
+            .map(p => p.text)
+            .join('')
+            .trim();
         const finishReason = upstreamJson?.candidates?.[0]?.finishReason || '';
+        if (!text) {
+            return jsonResponse({
+                ok: false,
+                error: `Resposta vazia da API Gemini (finishReason: ${finishReason || 'desconhecido'}).`
+            }, 502);
+        }
         return jsonResponse({
             ok: true,
             model,

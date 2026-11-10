@@ -41,7 +41,11 @@ const IAGuardian = {
     async chamarGemini(prompt, opts = {}) {
         const localKey = this.getApiKey();
         const model = opts.model || 'gemini-2.5-flash';
-        const generationConfig = { temperature: opts.temperature ?? 0.35, maxOutputTokens: opts.maxOutputTokens ?? 600 };
+        const generationConfig = {
+            temperature: opts.temperature ?? 0.35,
+            maxOutputTokens: opts.maxOutputTokens ?? 900,
+            ...(model.startsWith('gemini-2.5') ? { thinkingConfig: { thinkingBudget: 0 } } : {})
+        };
         if (localKey) {
             const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
                 method: 'POST',
@@ -50,12 +54,13 @@ const IAGuardian = {
             });
             const j = await resp.json();
             if (!resp.ok) throw new Error(j?.error?.message || `HTTP ${resp.status}`);
-            return (j?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+            const parts = j?.candidates?.[0]?.content?.parts || [];
+            return parts.filter(p => !p.thought && typeof p.text === 'string').map(p => p.text).join('').trim();
         }
         const resp = await fetch(this.getGeminiProxyUrl(), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt, model, ...generationConfig })
+            body: JSON.stringify({ prompt, model, temperature: generationConfig.temperature, maxOutputTokens: generationConfig.maxOutputTokens, thinkingBudget: 0 })
         });
         const j = await resp.json();
         if (!resp.ok || !j?.ok) throw new Error(j?.error || `HTTP ${resp.status}`);
@@ -158,7 +163,7 @@ const IAGuardian = {
 DADOS REAIS: Saúde ${rel?.saudeScore}% | Anomalias: ${JSON.stringify(rel?.anomalias || [])} | Celulares (${estoqueResumo.length}): ${JSON.stringify(estoqueResumo.slice(0, 25))} | Últimas Vendas: ${JSON.stringify(vendasHoje)}`;
 
         try {
-            const texto = (await this.chamarGemini(promptSistema, { temperature: 0.25, maxOutputTokens: 900 })) || 'Sem resposta da IA.';
+            const texto = (await this.chamarGemini(promptSistema, { temperature: 0.25, maxOutputTokens: 1200 })) || 'Sem resposta da IA.';
             const formatado = texto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\*\*(.*?)\*\*/g, '<strong style="color:#00FFA3;">$1</strong>').replace(/\n/g, '<br>');
             if (outEl) {
                 outEl.innerHTML = `<div style="background:rgba(16,185,129,0.08);border:1.5px solid #10b981;border-radius:14px;padding:18px;font-size:14px;line-height:1.6;color:#fff;"><div style="font-size:12px;font-weight:900;color:#10b981;margin-bottom:8px;">⚡ PARECER AO VIVO — GOOGLE GEMINI 2.5 FLASH</div>${formatado}</div>`;
