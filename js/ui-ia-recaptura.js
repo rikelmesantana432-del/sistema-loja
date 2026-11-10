@@ -105,7 +105,7 @@ const IARecaptura = {
         this.marcarEnviado(key, this.etapaAtual);
         window.open(`https://wa.me/${telWhatsApp}?text=${encodeURIComponent(msg)}`, '_blank');
         if (window.UI) {
-            UI.toast('📲 WhatsApp aberto! Aguarde o cliente responder "Sim/Pode" antes da 2ª mensagem.', 'success');
+            UI.toast('📲 WhatsApp aberto! Quando o cliente responder, envie a 2ª Msg convidando pro Grupo VIP.', 'success');
             this.renderListaCards();
         }
     },
@@ -150,12 +150,12 @@ const IARecaptura = {
                 <div>
                     <h3 style="font-size:19px;margin:0;color:#00FFA3;">🛡️ RECAPTURA VIP BLACK CESINHA (2 ETAPAS ANTI-BAN)</h3>
                     <p style="font-size:12px;color:var(--text-muted);margin:4px 0 0;">
-                        1ª Msg genérica p/ Black (sem link, sem citar capinha velha) • Trava ${this.COOLDOWN_SEGUNDOS}s • Limite seguro ${enviados}/${this.LIMITE_DIARIO_SEGURO} hoje
+                        1ª Msg: Pós-venda & conforto sobre a compra/forma de atendimento (sem grupo/link) • Trava ${this.COOLDOWN_SEGUNDOS}s • Limite ${enviados}/${this.LIMITE_DIARIO_SEGURO}/dia
                     </p>
                 </div>
                 <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                    <button class="btn btn-sm ${this.etapaAtual === 'quebra_gelo' ? 'btn-primary' : 'btn-ghost'}" style="font-weight:800;" onclick="IARecaptura.trocarEtapa('quebra_gelo')">🛡️ 1ª Msg: Quebra-Gelo Black (Sem Link)</button>
-                    <button class="btn btn-sm ${this.etapaAtual === 'oferta_grupo' ? 'btn-primary' : 'btn-ghost'}" style="font-weight:800;" onclick="IARecaptura.trocarEtapa('oferta_grupo')">🔥 2ª Msg: Oferta + Link Grupo VIP</button>
+                    <button class="btn btn-sm ${this.etapaAtual === 'quebra_gelo' ? 'btn-primary' : 'btn-ghost'}" style="font-weight:800;" onclick="IARecaptura.trocarEtapa('quebra_gelo')">🛡️ 1ª Msg: Pós-Venda & Conforto (Sem Grupo)</button>
+                    <button class="btn btn-sm ${this.etapaAtual === 'oferta_grupo' ? 'btn-primary' : 'btn-ghost'}" style="font-weight:800;" onclick="IARecaptura.trocarEtapa('oferta_grupo')">🔥 2ª Msg: Alusão Grupo VIP + Black</button>
                 </div>
             </div>
 
@@ -232,7 +232,7 @@ const IARecaptura = {
                 <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
                     <button class="btn btn-sm btn-ghost" style="font-size:11px;" onclick="IARecaptura.refinarComGemini('${c.key}')">✨ Variação Google Gemini</button>
                     <button class="btn btn-sm" style="background:#10b981;color:#052e16;font-weight:900;padding:7px 16px;font-size:13px;" onclick="IARecaptura.enviarWhatsAppCliente('${c.key}', '${c.telWhatsApp}')">
-                        📲 Enviar ${this.etapaAtual === 'quebra_gelo' ? '1ª Msg Black' : '2ª Msg + Grupo'}
+                        📲 Enviar ${this.etapaAtual === 'quebra_gelo' ? '1ª Msg Pós-Venda' : '2ª Msg + Grupo VIP'}
                     </button>
                 </div>
             </div>`).join('');

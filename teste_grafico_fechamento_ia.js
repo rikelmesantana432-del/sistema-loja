@@ -189,6 +189,7 @@ console.log('✅ [PASSOU] Duas vendas manuais idênticas (25+25) + venda multi (
 
 console.log('\n=== TESTE 6: UI._estoqueVender SEM BAIXA DUPLA & IARecaptura NO VENDEDOR ===');
 vm.runInContext(fs.readFileSync('js/ui-estoque.js', 'utf8'), sandbox);
+vm.runInContext(fs.readFileSync('js/ia-recaptura-copy.js', 'utf8'), sandbox);
 vm.runInContext(fs.readFileSync('js/ia-recaptura-mensagens.js', 'utf8'), sandbox);
 vm.runInContext(fs.readFileSync('js/ui-ia-recaptura.js', 'utf8'), sandbox);
 dm.data.estoqueAcessorios = [{ id: 'ac_99', nome: 'Capa Silicone', custo: 8, precoVenda: 35, quantidade: 5, status: 'disponivel' }];
@@ -304,11 +305,15 @@ console.log('✅ [PASSOU] Seed inicial respeitou saldos da nuvem (CP=1274.29, CS
 console.log('\n=== TESTE 10: SEGMENTAÇÃO BLACK CESINHA, PAGINAÇÃO (>35) E PROXY GEMINI ===');
 (async () => {
     vm.runInContext(fs.readFileSync('js/ui-ia-sugestoes.js', 'utf8'), sandbox);
+    const elizabete = { nome: 'elizabete', telefone: '75999001166', historico: [{ data: '2026-06-20', tipo: 'orcamento_troca', status: 'orcamento_nao_finalizado', celularUsado: 'moto g05', produtoNovo: 'IPHONE 11', valor: 0 }] };
+    const luiz = { nome: 'Luan', telefone: '75999001177', historico: [{ data: '2026-11-07', tipo: 'venda_multi', produto: 'Avulso: Capinha e o cabo do Ip 11 + Avulso: Pelicula', valor: 75 }] };
     dm.data.clientes = [
         { nome: 'Marcos', telefone: '75999001122', historico: [{ data: '2026-08-10', produto: 'Venda Avulsa: Capinha Case azul G34', valor: 30 }] },
         { nome: 'Everaldo', telefone: '75999001133', historico: [{ data: '2026-08-11', produto: 'Avulso: Fogos 19x4', valor: 60 }] },
         { nome: 'cliente 09', telefone: '75999001144', historico: [] },
-        { nome: 'MISIONARIA', telefone: '75999001155', historico: [] }
+        { nome: 'MISIONARIA', telefone: '75999001155', historico: [] },
+        elizabete,
+        luiz
     ];
     for (let i = 0; i < 40; i++) {
         dm.data.clientes.push({ nome: `Ana Teste ${i}`, telefone: `7598800${String(1000 + i)}`, historico: [{ data: '2026-09-01', produto: 'Película cerâmica', valor: 25 }] });
@@ -319,20 +324,34 @@ console.log('\n=== TESTE 10: SEGMENTAÇÃO BLACK CESINHA, PAGINAÇÃO (>35) E PR
     const everaldo = lista.find(c => c.nome === 'Everaldo');
     const cli09 = lista.find(c => c.nome === 'cliente 09');
     const misionaria = lista.find(c => c.nome === 'MISIONARIA');
-    if (marcos.categoria !== 'acessorio' || /capinha|tá usando|trocou/i.test(marcos.msgQuebraGelo) || !/Black Cesinha/i.test(marcos.msgQuebraGelo)) {
-        console.error('❌ [FALHOU] Segmentação/Msg Capinha incorreta:', marcos.categoria, marcos.msgQuebraGelo);
+    const elizOut = lista.find(c => c.nome === 'elizabete');
+    const luanOut = lista.find(c => c.nome === 'Luan');
+    if (marcos.categoria !== 'acessorio' || /Grupo VIP|Black Cesinha|chat\.whatsapp/i.test(marcos.msgQuebraGelo) || !/atenderam bem|atendimento|forma|servindo/i.test(marcos.msgQuebraGelo)) {
+        console.error('❌ [FALHOU] 1ª Msg acessório deve confortar sem citar Grupo/Black:', marcos.categoria, marcos.msgQuebraGelo);
         process.exit(1);
     }
-    if (everaldo.categoria !== 'fogos' || /fogos|tá usando|trocou/i.test(everaldo.msgQuebraGelo)) {
-        console.error('❌ [FALHOU] Cliente fogos vazou ou teve texto indevido:', everaldo.categoria, everaldo.msgQuebraGelo);
+    if (!/Grupo VIP/i.test(marcos.msgOfertaGrupo) || !marcos.msgOfertaGrupo.includes('FcuY7wDt7u3F1LusMdlko9')) {
+        console.error('❌ [FALHOU] 2ª Msg deve trazer alusão ao Grupo VIP + link:', marcos.msgOfertaGrupo);
         process.exit(1);
     }
-    if (/Amigo\(a\)|\*Cliente\*/i.test(cli09.msgQuebraGelo)) {
-        console.error('❌ [FALHOU] Saudação robótica em nome genérico:', cli09.msgQuebraGelo);
+    if (everaldo.categoria !== 'fogos' || /Grupo VIP|Black/i.test(everaldo.msgQuebraGelo) || !/fogos/i.test(everaldo.msgQuebraGelo)) {
+        console.error('❌ [FALHOU] 1ª Msg fogos incorreta:', everaldo.categoria, everaldo.msgQuebraGelo);
         process.exit(1);
     }
-    if (!misionaria || misionaria.categoria !== 'celular' || misionaria.totalGasto !== 998) {
-        console.error('❌ [FALHOU] Falhou cruzamento de venda sem c.historico:', misionaria);
+    if (/Amigo\(a\)|\*Cliente\*/i.test(cli09.msgQuebraGelo) || /Grupo VIP|Black/i.test(cli09.msgQuebraGelo)) {
+        console.error('❌ [FALHOU] 1ª Msg genérica incorreta:', cli09.msgQuebraGelo);
+        process.exit(1);
+    }
+    if (!misionaria || misionaria.categoria !== 'celular' || misionaria.totalGasto !== 998 || !/Note 70/i.test(misionaria.msgQuebraGelo) || /Grupo VIP|Black/i.test(misionaria.msgQuebraGelo)) {
+        console.error('❌ [FALHOU] Cruzamento/1ª Msg celular incorreta:', misionaria);
+        process.exit(1);
+    }
+    if (!elizOut?.ehOrcamentoPendente || !/simulação|confortável/i.test(elizOut.msgQuebraGelo) || /Grupo VIP/i.test(elizOut.msgQuebraGelo)) {
+        console.error('❌ [FALHOU] Orçamento de troca não personalizado na 1ª Msg:', elizOut?.msgQuebraGelo);
+        process.exit(1);
+    }
+    if (luanOut?.formaCompra !== 'combinado' || !/combinada/i.test(luanOut.msgQuebraGelo)) {
+        console.error('❌ [FALHOU] Forma combinada não refletida no conforto da 1ª Msg:', luanOut?.formaCompra, luanOut?.msgQuebraGelo);
         process.exit(1);
     }
     let chamadoUrl = '';

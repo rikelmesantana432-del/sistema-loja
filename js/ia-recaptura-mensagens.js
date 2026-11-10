@@ -1,15 +1,11 @@
-// StrategyOS 3.1 — Motor de Segmentação e Copy Black Cesinha (Recaptura 2 Etapas Anti-Ban)
-// Separa lógica de base/mensagens da camada de UI (MAX_LINES <= 350).
+// StrategyOS 3.1 — Motor de Base, Cruzamento e Segmentação WhatsApp (MAX_LINES <= 350)
+// A geração de textos em 2 etapas vive em js/ia-recaptura-copy.js (IARecapturaCopy).
 
 const IARecapturaMotor = {
     LINK_GRUPO_PADRAO: 'https://chat.whatsapp.com/FcuY7wDt7u3F1LusMdlko9',
 
     normalizarTexto(txt) {
-        return String(txt || '')
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '')
-            .toLowerCase()
-            .trim();
+        return String(txt || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
     },
 
     limparTelefone(tel) {
@@ -49,14 +45,12 @@ const IARecapturaMotor = {
     },
 
     ehItemAssistencia(txtNorm) {
-        return /^os\s*#/i.test(txtNorm) || /\b(manutencao|manutecao|conserto|concerto|troca\s*(de)?\s*tela|trocar\s*tela|bateria|conector|software|formatacao|fomatacao|avaliacao|limpeza|sensor|recolagem|tela\s*2|segunda\s*linha)\b/i.test(txtNorm);
+        return /^os\s*#/i.test(txtNorm) || /\b(manutencao|manutecao|conserto|concerto|troca\s*(de)?\s*tela|trocar\s*tela|tela|display|diagnostico|bateria|conector|software|formatacao|fomatacao|avaliacao|limpeza|sensor|recolagem|tela\s*2|segunda\s*linha|botao)\b/i.test(txtNorm);
     },
 
     ehCompraCelular(txtNorm, valor = 0) {
         if (this.ehItemFogos(txtNorm) || this.ehItemAcessorio(txtNorm) || this.ehItemAssistencia(txtNorm)) return false;
-        if (/\b(aparelho\s*celular|iphone|redmi|xiaomi|realme|samsung|moto\s*g|moto\s*e|motorola|poco|infinix|galaxy|note\s*\d+|a0\d|a1\d|a2\d|a3\d|a5\d)\b/i.test(txtNorm)) {
-            return true;
-        }
+        if (/\b(aparelho\s*celular|iphone|redmi|xiaomi|realme|samsung|moto\s*g|moto\s*e|motorola|poco|infinix|galaxy|note\s*\d+|a0\d|a1\d|a2\d|a3\d|a5\d)\b/i.test(txtNorm)) return true;
         return valor >= 450;
     },
 
@@ -65,8 +59,19 @@ const IARecapturaMotor = {
         const ultimo = itens.slice().reverse().find(x => String(x.produto || x.modelo || x.servico || '').trim());
         if (!ultimo) return 'Cadastro sem compras registradas';
         const bruto = String(ultimo.produto || `${ultimo.modelo || ''} ${ultimo.servico || ''}`).trim();
-        const limpo = bruto.replace(/^(avulso|venda avulsa):\s*/i, '').replace(/\(\d+\s*itens?\)$/i, '').replace(/\s+/g, ' ').trim();
-        return limpo.length > 48 ? limpo.substring(0, 45) + '...' : limpo || 'Cliente da Loja';
+        const limpo = window.IARecapturaCopy
+            ? IARecapturaCopy.limparTextoSeguro(bruto)
+            : bruto.replace(/^(avulso|venda avulsa):\s*/i, '').replace(/\(\d+\s*itens?\)$/i, '').replace(/\s+/g, ' ').trim();
+        return limpo.length > 48 ? limpo.substring(0, 45) + '...' : limpo || 'Atendimento na Loja';
+    },
+
+    detectarFormaCompra(cli) {
+        const todos = [...cli.compras, ...cli.osList];
+        if (todos.some(x => x.formaTag === 'troca')) return 'troca';
+        if (todos.some(x => x.formaTag === 'combinado')) return 'combinado';
+        if (todos.some(x => x.formaTag === 'entrada')) return 'entrada';
+        if (todos.length > 0 && todos.every(x => x.ehOrcamento)) return 'orcamento';
+        return 'balcao';
     },
 
     classificarSegmento(cli) {
@@ -76,6 +81,9 @@ const IARecapturaMotor = {
         const todosTextos = [...textosCompras, ...textosOS];
         const mencionaIphone = todosTextos.some(t => /\b(iphone|magsafe)\b/i.test(t));
 
+        const todosOrc = cli.compras.length > 0 && cli.osList.length === 0 && cli.compras.every(x => x.ehOrcamento);
+        const itemOrcTroca = cli.compras.find(x => x.formaTag === 'troca' && x.ehOrcamento);
+
         if (osPronta) {
             return {
                 categoria: 'os_pronta',
@@ -83,6 +91,7 @@ const IARecapturaMotor = {
                 badge: `🚨 OS #${osPronta.numero} Pronta p/ Retirar`,
                 corBadge: '#ef4444',
                 prioridade: 1,
+                ehOrcamentoPendente: false,
                 osPronta
             };
         }
@@ -95,6 +104,20 @@ const IARecapturaMotor = {
                 badge: '🎇 Cliente Fogos & Eventos',
                 corBadge: '#f59e0b',
                 prioridade: 5,
+                ehOrcamentoPendente: false,
+                osPronta: null
+            };
+        }
+
+        if (todosOrc) {
+            return {
+                categoria: itemOrcTroca ? 'celular' : 'assistencia',
+                subPerfil: itemOrcTroca ? 'orcamento_troca' : 'orcamento_conserto',
+                badge: itemOrcTroca ? '🔄 Orçamento de Troca' : '📝 Orçamento na Bancada',
+                corBadge: '#0ea5e9',
+                prioridade: 3,
+                ehOrcamentoPendente: true,
+                orcamentoDetalhe: itemOrcTroca?.produto || '',
                 osPronta: null
             };
         }
@@ -104,9 +127,10 @@ const IARecapturaMotor = {
             return {
                 categoria: 'celular',
                 subPerfil: mencionaIphone ? 'iphone' : 'android',
-                badge: mencionaIphone ? '🍎 Cliente iPhone (Troca Black)' : '📱 Comprou Celular (Troca Black)',
+                badge: mencionaIphone ? '🍎 Cliente iPhone (Pós-Venda)' : '📱 Comprou Celular (Pós-Venda)',
                 corBadge: '#10b981',
                 prioridade: 2,
+                ehOrcamentoPendente: false,
                 osPronta: null
             };
         }
@@ -119,6 +143,7 @@ const IARecapturaMotor = {
                 badge: '🔧 Assistência / Manutenção',
                 corBadge: '#3b82f6',
                 prioridade: 3,
+                ehOrcamentoPendente: false,
                 osPronta: null
             };
         }
@@ -130,6 +155,7 @@ const IARecapturaMotor = {
                 badge: mencionaIphone ? '🛍️ Acessórios iPhone / Capas' : '🛍️ Acessórios & Películas',
                 corBadge: '#a855f7',
                 prioridade: 4,
+                ehOrcamentoPendente: false,
                 osPronta: null
             };
         }
@@ -140,6 +166,7 @@ const IARecapturaMotor = {
             badge: '📝 Cadastro s/ Compra Registrada',
             corBadge: '#64748b',
             prioridade: 6,
+            ehOrcamentoPendente: false,
             osPronta: null
         };
     },
@@ -153,11 +180,12 @@ const IARecapturaMotor = {
         const registrar = (nomeRaw, telRaw, itemHist) => {
             const telLimpo = this.limparTelefone(telRaw);
             if (!telLimpo) return false;
+            const nomeLimp = window.IARecapturaCopy ? IARecapturaCopy.limparTextoSeguro(nomeRaw) : String(nomeRaw || '');
             if (!mapa.has(telLimpo)) {
                 mapa.set(telLimpo, {
                     key: telLimpo,
-                    nome: String(nomeRaw || 'Cliente Loja').replace(/\d{5,}/g, '').trim() || 'Cliente Loja',
-                    primeiroNome: this.extrairPrimeiroNome(nomeRaw),
+                    nome: nomeLimp.replace(/\d{5,}/g, '').trim() || 'Cliente Loja',
+                    primeiroNome: this.extrairPrimeiroNome(nomeLimp),
                     telefone: String(telRaw || '').trim(),
                     telWhatsApp: telLimpo,
                     compras: [],
@@ -167,7 +195,7 @@ const IARecapturaMotor = {
                 });
             }
             const cli = mapa.get(telLimpo);
-            cli.nome = this.escolherMelhorNome(cli.nome, nomeRaw);
+            cli.nome = this.escolherMelhorNome(cli.nome, nomeLimp);
             cli.primeiroNome = this.extrairPrimeiroNome(cli.nome);
 
             if (itemHist) {
@@ -196,7 +224,20 @@ const IARecapturaMotor = {
             if (hist.length === 0) registrar(c.nome, c.telefone, null);
             else hist.forEach(h => {
                 const descDet = h.detalhes ? `${h.detalhes.aparelho || ''} ${h.detalhes.servico || ''}`.trim() : '';
-                registrar(c.nome, c.telefone, { origem: 'compra', data: String(h.data || c.dataCadastro || '2026-01-01').substring(0, 10), produto: String(h.produtoNovo || h.produto || descDet || '').trim(), valor: parseFloat(h.valor || h.clientePagou || h.detalhes?.valor_orcado || 0) });
+                const descOrcTroca = (h.celularUsado || h.produtoNovo) ? `${h.celularUsado || ''} pro ${h.produtoNovo || ''}`.trim() : '';
+                const prodRaw = String(h.produtoNovo || h.produto || descDet || `${h.modelo || ''} ${h.servico || ''}`).trim();
+                const ehOrc = String(h.tipo || '').startsWith('orcamento') || String(h.status || '').includes('nao_finalizado');
+                const formaTag = (h.celularUsado || h.tipo === 'orcamento_troca') ? 'troca'
+                    : (h.entrada > 0 && h.restante > 0) ? 'entrada'
+                    : (String(h.produto || '').includes(' + ') ? 'combinado' : '');
+                registrar(c.nome, c.telefone, {
+                    origem: 'compra',
+                    data: String(h.data || c.dataCadastro || '2026-01-01').substring(0, 10),
+                    produto: (ehOrc && descOrcTroca) ? descOrcTroca : prodRaw,
+                    valor: parseFloat(h.valor || h.clientePagou || h.detalhes?.valor_orcado || 0),
+                    ehOrcamento: ehOrc,
+                    formaTag
+                });
             });
         });
 
@@ -204,9 +245,7 @@ const IARecapturaMotor = {
             const telDireto = this.limparTelefone(os.telefone);
             const telCruzado = telDireto || nomeParaTel.get(this.normalizarTexto(os.cliente)) || '';
             if (!telCruzado) {
-                if (os.cliente && !this.nomeEhGenerico(os.cliente)) {
-                    semTelefoneDetalhes.push({ nome: `${os.cliente} (OS #${os.numero})`, telAtual: os.telefone || 'Sem número', origem: 'Ordem de Serviço' });
-                }
+                if (os.cliente && !this.nomeEhGenerico(os.cliente)) semTelefoneDetalhes.push({ nome: `${os.cliente} (OS #${os.numero})`, telAtual: os.telefone || 'Sem número', origem: 'Ordem de Serviço' });
                 return;
             }
             registrar(os.cliente || 'Cliente OS', os.telefone || telCruzado, {
@@ -216,7 +255,8 @@ const IARecapturaMotor = {
                 data: String(os.dataCriacao || '2026-08-01').substring(0, 10),
                 modelo: String(os.modelo || '').trim(),
                 servico: String(os.servico || '').split('\n')[0].trim(),
-                valor: parseFloat(os.valorFinal || os.preco || 0)
+                valor: parseFloat(os.valorFinal || os.preco || 0),
+                formaTag: (os.valorSinal > 0 && os.valorSinal < (os.valorFinal || os.preco || 0)) ? 'entrada' : ''
             });
         });
 
@@ -224,15 +264,15 @@ const IARecapturaMotor = {
             const cliNome = String(v.cliente || '').trim();
             if (!cliNome || this.nomeEhGenerico(cliNome)) return;
             const telVenda = this.limparTelefone(v.telefone) || nomeParaTel.get(this.normalizarTexto(cliNome)) || '';
-            if (!telVenda) {
-                nomesVendasSemTel.add(cliNome);
-                return;
-            }
+            if (!telVenda) { nomesVendasSemTel.add(cliNome); return; }
+            const formaTag = (v.pagamentoCombinado || v.pagamentoDivisao || String(v.produto || '').includes(' + ')) ? 'combinado'
+                : (v.valorEntrada > 0 && v.valorRestante > 0) ? 'entrada' : '';
             registrar(cliNome, v.telefone || telVenda, {
                 origem: 'compra',
                 data: String(v.data || '2026-01-01').substring(0, 10),
                 produto: String(v.produto || '').trim(),
-                valor: parseFloat(v.valorVenda || v.liquido || v.valorBruto || v.valor || 0)
+                valor: parseFloat(v.valorVenda || v.liquido || v.valorBruto || v.valor || 0),
+                formaTag
             });
         });
 
@@ -243,16 +283,16 @@ const IARecapturaMotor = {
 
         mapa.forEach(cli => {
             idx++;
-            const diasSemVir = Math.max(1, Math.floor((hojeMs - new Date(cli.ultimaData).getTime()) / 86400000));
+            cli.formaCompra = this.detectarFormaCompra(cli);
             const seg = this.classificarSegmento(cli);
+            cli.ultimoResumo = this.resumirPerfilHistorico(cli);
             const msgQuebraGelo = this.gerarMsgQuebraGelo(cli, idx, seg);
             const msgOfertaGrupo = this.gerarMsgOfertaGrupo(cli, seg, linkCustom);
 
             lista.push({
                 ...cli,
-                diasSemVir,
+                diasSemVir: Math.max(1, Math.floor((hojeMs - new Date(cli.ultimaData).getTime()) / 86400000)),
                 ...seg,
-                ultimoResumo: this.resumirPerfilHistorico(cli),
                 msgQuebraGelo,
                 msgOfertaGrupo,
                 mensagem: etapaAtual === 'oferta_grupo' ? msgOfertaGrupo : msgQuebraGelo,
@@ -260,80 +300,29 @@ const IARecapturaMotor = {
             });
         });
 
-        lista.sort((a, b) => {
-            if (a.enviadoHoje !== b.enviadoHoje) return a.enviadoHoje ? 1 : -1;
-            if (a.prioridade !== b.prioridade) return a.prioridade - b.prioridade;
-            return b.totalGasto - a.totalGasto;
-        });
+        lista.sort((a, b) => (a.enviadoHoje !== b.enviadoHoje) ? (a.enviadoHoje ? 1 : -1) : (a.prioridade !== b.prioridade ? a.prioridade - b.prioridade : b.totalGasto - a.totalGasto));
 
         return {
             lista,
-            resumo: {
-                totalWhatsAppValido: lista.length,
-                semTelefoneCadastros: semTelefoneDetalhes.length,
-                nomesVendasSemCadastro: nomesVendasSemTel.size,
-                semTelefoneDetalhes: semTelefoneDetalhes.slice(0, 60)
-            }
+            resumo: { totalWhatsAppValido: lista.length, semTelefoneCadastros: semTelefoneDetalhes.length, nomesVendasSemCadastro: nomesVendasSemTel.size, semTelefoneDetalhes: semTelefoneDetalhes.slice(0, 60) }
         };
     },
 
     gerarMsgQuebraGelo(cli, idx, seg) {
+        if (window.IARecapturaCopy) return IARecapturaCopy.gerarPrimeiraMsg(cli, idx, seg, this.normalizarTexto.bind(this));
         const nomeSp = cli.primeiroNome ? ` *${cli.primeiroNome}*` : '';
-        if (seg.categoria === 'os_pronta' && seg.osPronta) {
-            const mod = (seg.osPronta.modelo || 'aparelho').toUpperCase();
-            return `Olá${nomeSp}, tudo bem? 😊 Aqui é da *Cesinha Acessórios*! Passando rápido pra avisar que o seu *${mod}* já ficou pronto e testado aqui na bancada. Você consegue passar aqui hoje pra retirar?`;
-        }
-        if (seg.categoria === 'celular') {
-            const opcoesCel = [
-                `Oi${nomeSp}, tudo bem? 😊 Aqui é da *Cesinha Acessórios*! Como você já garantiu aparelho com a gente, estamos colocando os clientes da casa na frente pra receber a lista VIP da nossa *Black Cesinha* deste mês. Posso te mandar quando liberar?`,
-                `Olá${nomeSp}, tudo joia por aí? Aqui é da equipe da *Cesinha Acessórios*! Vamos soltar condições especiais de *Black Friday* (bônus na troca de aparelho e acessórios) pros clientes da loja antes de postar aberto. Quer que eu te mande aqui?`,
-                `Oi${nomeSp}, tudo tranquilo? 😊 Aqui é da *Cesinha Acessórios*! Tô separando o pessoal que já comprou celular aqui na loja pra mandar em primeira mão a tabela fechada da *Black Cesinha*. Posso deixar seu WhatsApp na lista?`
-            ];
-            return opcoesCel[idx % opcoesCel.length];
-        }
-        const opcoesGerais = [
-            `Oi${nomeSp}, tudo bem com você? 😊 Aqui é da *Cesinha Acessórios*! Tô chamando alguns clientes da loja antes de divulgar aberto porque nossa *Black Cesinha* tá chegando com promoções fortes em acessórios, manutenção e celulares. Posso te mandar quando abrir?`,
-            `Olá${nomeSp}, tudo joia? Aqui é da equipe da *Cesinha Acessórios*! A gente tá separando os clientes aqui da loja que querem receber primeiro as ofertas fechadas da *Black Cesinha* deste mês. Quer que eu te mande por aqui?`,
-            `Oi${nomeSp}, tudo tranquilo por aí? 😊 Aqui é da *Cesinha Acessórios*! Como você já é cliente nosso, queria saber se posso te colocar na lista VIP da *Black Cesinha* pra ver as ofertas relâmpago antes de acabar o estoque?`,
-            `Olá${nomeSp}, tudo bem? Aqui é da *Cesinha Acessórios*! Vamos liberar cupons e descontos reais de *Black Friday* primeiro no WhatsApp pros clientes da loja antes de postar no Instagram. Posso te enviar em primeira mão?`,
-            `Opa${nomeSp}, tudo joia? 😊 Aqui é da *Cesinha Acessórios*! Esse mês tem condição especial na nossa *Black Cesinha* aqui na loja — posso salvar seu contato pra te mandar a lista VIP assim que abrir?`
-        ];
-        return opcoesGerais[idx % opcoesGerais.length];
+        return `Oi${nomeSp}, tudo bem? 😊 Aqui é da *Cesinha Acessórios*! Passando pra saber se deu tudo certo com a sua compra e o atendimento aqui na loja.`;
     },
 
     gerarMsgOfertaGrupo(cli, seg, linkCustom) {
+        if (window.IARecapturaCopy) return IARecapturaCopy.gerarSegundaMsgGrupo(cli, seg, linkCustom);
         const link = linkCustom || this.LINK_GRUPO_PADRAO;
-        const nomeSp = cli.primeiroNome ? ` *${cli.primeiroNome}*` : '';
-        if (seg.categoria === 'os_pronta' && seg.osPronta) {
-            const mod = (seg.osPronta.modelo || 'aparelho').toUpperCase();
-            return `Perfeito${nomeSp}! Já deixamos o seu *${mod}* separado aqui. 🎁 Na retirada hoje você ganha condição especial da *Black Cesinha* pra aplicar a *Película Hidrogel Fosca/Blindagem* nele e concorrer na nossa Urna Premiada!\n\nAproveita e entra no nosso *Grupo VIP de Ofertas Relâmpago*: ${link}`;
-        }
-        if (seg.subPerfil === 'iphone') {
-            return `Show${nomeSp}! Olhei aqui e já liberei os destaques da *Black Cesinha* pro perfil Apple: 🖤\n\n📱 *Supervalorização na Troca (até R$ 160 OFF à vista)*: pegamos seu iPhone usado como entrada no *iPhone 13 Pro (R$ 2.537,90)*, *iPhone 13 (R$ 2.037,90)* ou *iPhone 11 Pro Max (R$ 1.747,90 c/ até R$ 160 OFF)* — parcelamos a diferença em até 18x!\n🛡️ *Proteção VIP*: Capa Magsafe por *R$ 19,90* levando película Hidrogel Fosca ou Blindagem Completa!\n\n🔥 Entra aqui no *Grupo VIP da Cesinha Acessórios* (sem bagunça, só oferta real): ${link}`;
-        }
-        if (seg.categoria === 'assistencia') {
-            return `Perfeito${nomeSp}! Olha o que preparamos na *Black Cesinha* pra quem já cuida do aparelho com a gente: 🖤\n\n🔧 *Check-up + Cupom de R$ 20 OFF*: trazendo seu celular na loja fazemos teste grátis de conector/fonte + cupom pra tela, bateria, limpeza ou película Hidrogel Fosca/Blindagem!\n📱 *Troca Inteligente (até R$ 100 OFF à vista)*: *Realme Note 60x (R$ 697,90)*, *Note 70 (R$ 897,90)*, *Redmi 15C (R$ 1.069,90)* e *Redmi 15 (R$ 1.387,90)*!\n\n👇 Entra aqui no *Grupo VIP da Cesinha Acessórios* pra acompanhar as ofertas relâmpago: ${link}`;
-        }
-        if (seg.categoria === 'fogos') {
-            return `Massa${nomeSp}! 🖤 Na nossa *Black Cesinha* tem muita coisa boa rolando agora: *Caixa de Som Basike IPX6*, *Fone Air Max (R$ 119,90)*, *Smartwatch S9 Ultra (R$ 159,90)*, cabos/carregadores e toda linha de celulares com desconto na troca — além da nossa linha de *Fogos* pra comemorar!\n\n👇 Entra aqui no nosso *Grupo VIP de Ofertas* pra pegar as promoções antes de acabarem: ${link}`;
-        }
-        return `Maravilha${nomeSp}! Dá uma olhada no que vai rolar na nossa *Black Cesinha*: 🖤\n\n🎧 *Acessórios & Proteção*: Capa Magsafe *R$ 19,90* (levando película Hidrogel), Armon Shield *R$ 59,90*, *Smartwatch S9 Ultra R$ 159,90* e *Fone Air Max R$ 119,90* + Cupom Premiado na loja!\n📱 *Celulares c/ até R$ 100 OFF à vista* (e pegamos usado na troca!): *Note 60x R$ 697,90*, *Note 70 R$ 897,90*, *Redmi 15C R$ 1.069,90*, *Realme C73 R$ 1.274,90* e *Redmi 15 R$ 1.387,90*!\n\n👇 Entra aqui no *Grupo VIP da Cesinha Acessórios* (sem spam, só oferta relâmpago): ${link}`;
+        return `Que bom saber disso! 🙌 Quero te convidar pro nosso *Grupo VIP da Cesinha Acessórios* com as ofertas da *Black Cesinha*: ${link}`;
     },
 
     montarPromptGemini(cli, etapa, msgBase, linkGrupo) {
-        const nomeTxt = cli.primeiroNome || '(não citar nome)';
-        if (etapa === 'quebra_gelo') {
-            return `Você escreve mensagens humanas e curtas de WhatsApp para a loja "Cesinha Acessórios" (Amargosa-BA).
-Reescreva a 1ª mensagem de quebra-gelo abaixo deixando-a natural, leve e simpática (máximo 2 frases, SEM links, SEM valores/preços).
-REGRAS OBRIGATÓRIAS:
-- NUNCA mencione termos internos como "Avulso", "Venda Avulsa", "OS #", nem pergunte se o cliente ainda está usando capinha, película, cabo ou fogos antigos.
-- Seja genérico e amigável: diga que você está separando os clientes da loja para receberem antes os descontos/lista VIP da Black Cesinha e termine perguntando se pode mandar por aqui.
-- Cliente: ${nomeTxt}.
-Base:\n${msgBase}`;
-        }
-        return `Você escreve mensagens de WhatsApp para a loja "Cesinha Acessórios" (Amargosa-BA).
-O cliente acabou de responder "Sim/Pode mandar" à 1ª mensagem. Melhore a 2ª mensagem abaixo mantendo EXATAMENTE o link do Grupo VIP (${linkGrupo}) e os produtos/preços oficiais informados, com tom empolgante e humano (sem parecer spam).
-Base:\n${msgBase}`;
+        if (window.IARecapturaCopy) return IARecapturaCopy.montarPromptGemini(cli, etapa, msgBase, linkGrupo);
+        return `Melhore de forma curta e humana para WhatsApp sem citar códigos internos:\n${msgBase}`;
     }
 };
 
