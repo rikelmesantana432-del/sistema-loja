@@ -125,7 +125,7 @@ export async function onRequestPost(context) {
                         finalPayload.historico.vendas = mesclarArraysUnicos(
                             oldP.historico?.vendas,
                             incomingPayload.historico?.vendas,
-                            v => String(v.id || `${(v.data || '').substring(0, 16)}_${v.produto || ''}_${v.valorVenda || v.valorBruto || v.liquido || v.valor || 0}`),
+                            v => String(v.id || `${String(v.data || '')}_${v.produto || ''}_${v.valorVenda || v.valorBruto || v.liquido || v.valor || 0}`),
                             removidos
                         );
 
@@ -133,7 +133,7 @@ export async function onRequestPost(context) {
                         finalPayload.movimentacoesCaixa = mesclarArraysUnicos(
                             oldP.movimentacoesCaixa,
                             incomingPayload.movimentacoesCaixa,
-                            m => String(m.id || `${(m.data || '').substring(0, 16)}_${m.tipo || ''}_${m.valor || 0}_${(m.descricao || '').substring(0, 25)}`),
+                            m => String(m.id || `${String(m.data || '')}_${m.tipo || ''}_${m.valor || 0}_${(m.descricao || '').substring(0, 25)}`),
                             removidos
                         );
 
@@ -142,7 +142,7 @@ export async function onRequestPost(context) {
                         finalPayload.assistencia.ordensServico = mesclarArraysUnicos(
                             oldP.assistencia?.ordensServico,
                             incomingPayload.assistencia?.ordensServico,
-                            o => 'OS_' + String(o.numero || o.id || ''),
+                            o => 'OS_' + String(o.numero || '') + '_' + String(o.dataCriacao || o.id || (o.cliente || '').toLowerCase().trim()),
                             removidos
                         ).sort((a, b) => (b.numero || 0) - (a.numero || 0));
 

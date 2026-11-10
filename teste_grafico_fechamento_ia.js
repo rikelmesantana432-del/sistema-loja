@@ -212,5 +212,64 @@ if (!htmlRecap.includes('IARecaptura.trocarEtapa') || !htmlRecap.includes('https
 }
 console.log('✅ [PASSOU] UI._estoqueVender (1x baixa) e IARecaptura validados com sucesso!');
 
+console.log('\n=== TESTE 7: ANTI-DUPLICIDADE CRÉDITO + ISOLAMENTO DE FOGOS NA GAVETA ===');
+const vendCode = fs.readFileSync('js/ui-vendedor.js', 'utf8');
+if (vendCode.includes('<label class="vendedor-radio-parcela"') && vendCode.includes('onclick="UI._vndConfirmar')) {
+    console.error('❌ [FALHOU] Parcelas de cartão ainda usam <label onclick> propenso a duplo disparo!');
+    process.exit(1);
+}
+dm.data = dm.getDefaultData();
+dm.data.financeiro.caixaPrincipal = 0;
+dm.data.financeiro.caixaSecundario = 0;
+dm.data.financeiro.caixaFogos = 0;
+dm.venderCarrinho(
+    [{ tipo: 'avulso', nome: 'Fogos Bomba Test', precoVenda: 60, precoFinal: 60, custo: 20 }],
+    [{ forma: 'dinheiro', valor: 60, caixa: 'caixaSecundario' }],
+    'Cliente Fogos'
+);
+dm.venderCarrinho(
+    [{ tipo: 'avulso', nome: 'Capinha Silicone', precoVenda: 35, precoFinal: 35, custo: 5 }],
+    [{ forma: 'dinheiro', valor: 35, caixa: 'caixaSecundario' }],
+    'Cliente Capa'
+);
+dm.reconciliarFinanceiroCicloAtual(dm.data);
+if (Math.abs(dm.data.financeiro.caixaFogos - 60) > 0.01 || Math.abs(dm.data.financeiro.caixaSecundario - 35) > 0.01) {
+    console.error('❌ [FALHOU] Fogos contaminou caixaSecundario ou não separou corretamente!', dm.data.financeiro);
+    process.exit(1);
+}
+const movFogos = dm.data.movimentacoesCaixa.find(m => (m.descricao || '').includes('Fogos Bomba Test'));
+if (!movFogos || movFogos.caixa !== 'caixaFogos') {
+    console.error('❌ [FALHOU] Movimentação de Fogos não gravou caixaFogos!', movFogos);
+    process.exit(1);
+}
+console.log('✅ [PASSOU] Parcelas sem <label onclick> e venda de Fogos isolada (Fogos=60, Gaveta=35)!');
+
+console.log('\n=== TESTE 8: MERGE DE NUVEM NAO COLIDE VENDAS NO MESMO MINUTO NEM OS REPETIDA HISTORICA ===');
+dm.data = dm.getDefaultData();
+dm.data.historico.vendas = [
+    { data: '2026-07-06T19:44:24.750Z', produto: 'Venda Avulsa: Cabo', valorVenda: 20, custo: 3 }
+];
+dm.data.assistencia.ordensServico = [
+    { numero: 35, cliente: 'Valnilene Santos', dataCriacao: '2026-08-04T15:56:02.463Z', status: 'pronto' }
+];
+dm._mesclarDadosNuvemInteligente({
+    _ultimoSaveLocal: Date.now() + 5000,
+    historico: {
+        vendas: [
+            { data: '2026-07-06T19:44:47.258Z', produto: 'Venda Avulsa: Cabo', valorVenda: 20, custo: 3 }
+        ]
+    },
+    assistencia: {
+        ordensServico: [
+            { numero: 35, cliente: 'Welington', dataCriacao: '2026-08-21T15:53:23.538Z', status: 'aguardando_peca' }
+        ]
+    }
+}, Date.now() + 5000);
+if (dm.data.historico.vendas.length !== 2 || dm.data.assistencia.ordensServico.length !== 2) {
+    console.error('❌ [FALHOU] Colisão indevida no merge de vendas/OS históricas!', dm.data.historico.vendas.length, dm.data.assistencia.ordensServico.length);
+    process.exit(1);
+}
+console.log('✅ [PASSOU] Merge preservou 2 vendas do mesmo minuto e 2 OS históricas sem colisão!');
+
 console.log('\n=== TODOS OS TESTES ESPECÍFICOS DE GRÁFICO, FECHAMENTO E SYNC PASSARAM COM SUCESSO! ===');
 setTimeout(() => process.exit(0), 50);

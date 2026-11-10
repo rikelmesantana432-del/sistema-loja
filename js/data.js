@@ -208,11 +208,14 @@ class DataManager {
                     const custoVal = Math.round(parseFloat(v.custo || 0) * prop * 100) / 100;
                     const lucroVal = Math.max(0, Math.round((valPag - custoVal) * 100) / 100);
                     const tp = String(v.tipo || 'venda').toLowerCase();
+                    const prodLow = String(v.produto || '').toLowerCase();
+                    const ehFogos = tp.includes('fogos') || prodLow.includes('fogo') || prodLow.includes('giranda') || prodLow.includes('caixa 12') || prodLow.includes('caixa 19') || caixaPag === 'caixaFogos';
+                    const caixaFinalFaltante = ehFogos ? 'caixaFogos' : caixaPag;
                     targetData.movimentacoesCaixa.push({
-                        id: v.id ? `${v.id}_${caixaPag}` : this._gerarIdUnico('reconc'),
+                        id: v.id ? `${v.id}_${caixaFinalFaltante}` : this._gerarIdUnico('reconc'),
                         data: v.data || new Date().toISOString(),
                         tipo: tp === 'multi' ? 'venda_multi' : (v.tipo || 'venda'),
-                        caixa: caixaPag,
+                        caixa: caixaFinalFaltante,
                         valor: valPag,
                         custo: custoVal,
                         lucro: lucroVal,
@@ -272,6 +275,11 @@ class DataManager {
                 const val = parseFloat(m.valor || 0);
                 if (isNaN(val) || Math.abs(val) > 50000) return;
                 const cx = m.caixa || m.caixaDestino || 'caixaSecundario';
+                const descM = String(m.descricao || m.motivo || m.produto || '').toLowerCase();
+                const isMovFogos = cx === 'caixaFogos' || tp.includes('fogos') || descM.includes('fogo') || descM.includes('giranda') || descM.includes('caixa 12') || descM.includes('caixa 19');
+                if (isMovFogos && tp !== 'transferencia') {
+                    return;
+                }
 
                 if (tp === 'transferencia') {
                     const orig = m.caixaOrigem || m.caixa;
@@ -326,6 +334,9 @@ class DataManager {
                 }
             });
             targetData.comissaoIlannaMensal = Math.round(comissaoCiclo * 100) / 100;
+            if (targetData.meta) {
+                targetData.meta.progressoAtual = Math.round(Math.max(parseFloat(targetData.financeiro.caixaPrincipal) || 0, targetData.comissaoIlannaMensal || 0) * 100) / 100;
+            }
         } catch (e) {
             console.warn('[StrategyOS] Aviso ao reconciliar financeiro do ciclo:', e);
         }
@@ -1629,12 +1640,19 @@ class DataManager {
             const localOS = this.data.assistencia.ordensServico || [];
             const cloudOS = (cloudPayload.assistencia && cloudPayload.assistencia.ordensServico) || [];
             const mapOS = new Map();
-            cloudOS.forEach(o => { if (o && !idsEstornados.has('OS_' + o.numero)) mapOS.set(String(o.numero), o); });
+            const osKeyFn = (o) => 'OS_' + String(o.numero || '') + '_' + String(o.dataCriacao || o.id || (o.cliente || '').toLowerCase().trim());
+            cloudOS.forEach(o => {
+                if (!o) return;
+                const ok = osKeyFn(o);
+                if (!idsEstornados.has('OS_' + o.numero) && !idsEstornados.has(ok)) mapOS.set(ok, o);
+            });
             localOS.forEach(o => {
-                if (!o || idsEstornados.has('OS_' + o.numero)) return;
-                const existing = mapOS.get(String(o.numero));
+                if (!o) return;
+                const ok = osKeyFn(o);
+                if (idsEstornados.has('OS_' + o.numero) || idsEstornados.has(ok)) return;
+                const existing = mapOS.get(ok);
                 if (!existing || (o.dataEntrega && !existing.dataEntrega) || o.status !== existing.status || (o.pago || 0) > (existing.pago || 0)) {
-                    mapOS.set(String(o.numero), o);
+                    mapOS.set(ok, o);
                 }
             });
             if (!mergedData.assistencia) mergedData.assistencia = {};
@@ -1682,12 +1700,12 @@ class DataManager {
                 const mapVendas = new Map();
                 cloudVendas.forEach(v => {
                     if (!v) return;
-                    const k = String(v.id || `${(v.data || '').substring(0, 16)}_${v.produto || ''}_${v.valorVenda || v.liquido || v.valorBruto || v.valor || 0}`);
+                    const k = String(v.id || `${String(v.data || '')}_${v.produto || ''}_${v.valorVenda || v.liquido || v.valorBruto || v.valor || 0}`);
                     if (!idsEstornados.has(k)) mapVendas.set(k, v);
                 });
                 localVendas.forEach(v => {
                     if (!v) return;
-                    const k = String(v.id || `${(v.data || '').substring(0, 16)}_${v.produto || ''}_${v.valorVenda || v.liquido || v.valorBruto || v.valor || 0}`);
+                    const k = String(v.id || `${String(v.data || '')}_${v.produto || ''}_${v.valorVenda || v.liquido || v.valorBruto || v.valor || 0}`);
                     if (!idsEstornados.has(k)) mapVendas.set(k, v);
                 });
                 if (!mergedData.historico) mergedData.historico = { vendas: [], compras: [], movimentacoes: [] };
@@ -1701,12 +1719,12 @@ class DataManager {
                 const mapMovs = new Map();
                 cloudMovs.forEach(m => {
                     if (!m) return;
-                    const k = String(m.id || `${(m.data || '').substring(0, 16)}_${m.tipo || ''}_${m.valor || 0}_${(m.descricao || '').substring(0, 25)}`);
+                    const k = String(m.id || `${String(m.data || '')}_${m.tipo || ''}_${m.valor || 0}_${(m.descricao || '').substring(0, 25)}`);
                     if (!idsEstornados.has(k)) mapMovs.set(k, m);
                 });
                 localMovs.forEach(m => {
                     if (!m) return;
-                    const k = String(m.id || `${(m.data || '').substring(0, 16)}_${m.tipo || ''}_${m.valor || 0}_${(m.descricao || '').substring(0, 25)}`);
+                    const k = String(m.id || `${String(m.data || '')}_${m.tipo || ''}_${m.valor || 0}_${(m.descricao || '').substring(0, 25)}`);
                     if (!idsEstornados.has(k)) mapMovs.set(k, m);
                 });
                 mergedData.movimentacoesCaixa = Array.from(mapMovs.values());
@@ -3784,12 +3802,16 @@ class DataManager {
 
         // 3. Extrato Geral de Movimentações
         const agoraIso = new Date().toISOString();
+        const isDinheiroLog = (caixaDestino === 'caixaSecundario') || ((tipo || '').includes('dinheiro')) || (!caixaDestino && (tipo || '').includes('avista'));
+        const caixaEfetivoLog = (isFogos || caixaDestino === 'caixaFogos')
+            ? 'caixaFogos'
+            : (caixaDestino === 'caixaTerciario' ? 'caixaTerciario' : (isDinheiroLog ? 'caixaSecundario' : 'caixaPrincipal'));
         if (!this.data.movimentacoesCaixa) this.data.movimentacoesCaixa = [];
         this.data.movimentacoesCaixa.push({
             id: Date.now() + Math.floor(Math.random() * 1000),
             data: agoraIso,
             tipo: tipo || 'venda',
-            caixa: caixaDestino || 'caixaPrincipal',
+            caixa: caixaEfetivoLog,
             valor: valorTotal,
             custo: valorCusto,
             lucro: lucroLiquido,

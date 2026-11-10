@@ -896,12 +896,12 @@ UI._vndCartaoMulti = function (p) {
     const juros_mensal = 0.0199;
     let html = `<div class="vendedor-step-header"><span class="vendedor-step-badge">PAGAMENTO</span><h2 style="font-size:28px">💳 CARTÃO CRÉDITO</h2><p style="font-size:20px">Total da Compra: ${UI.R(p)}</p></div>`;
     html += '<div class="vendedor-parcelas-lista">';
-    html += `<label class="vendedor-radio-parcela" style="font-size:18px;padding:14px" onclick="UI._vndConfirmarMulti('credito_1x',${p})"><input type="radio" name="vnd-parc-multi"><span class="vendedor-parcela-label" style="font-size:18px;font-weight:700">Crédito 1x (À vista)</span><span style="font-size:18px">Cliente paga: ${UI.R(p)}</span></label>`;
+    html += `<button type="button" class="vendedor-radio-parcela" style="font-size:18px;padding:14px;width:100%;text-align:left;color:var(--text-primary)" onclick="UI._vndConfirmarMulti('credito_1x',${p})"><span aria-hidden="true" style="width:16px;height:16px;border-radius:50%;border:2px solid var(--accent-cyan);display:inline-block;flex-shrink:0"></span><span class="vendedor-parcela-label" style="font-size:18px;font-weight:700">Crédito 1x (À vista)</span><span style="font-size:18px">Cliente paga: ${UI.R(p)}</span></button>`;
     for (let i = 2; i <= 18; i++) {
         const clientePaga = p * Math.pow(1 + juros_mensal, i);
         const jurosValor = clientePaga - p;
         const parcVal = clientePaga / i;
-        html += `<label class="vendedor-radio-parcela" style="font-size:16px;padding:12px" onclick="UI._vndConfirmarMulti('credito_${i}x',${clientePaga.toFixed(2)})"><input type="radio" name="vnd-parc-multi"><span class="vendedor-parcela-label" style="font-size:18px;font-weight:700">${i}x de ${UI.R(parcVal)}</span><span style="font-size:16px">Total: ${UI.R(clientePaga)} — Juros: ${UI.R(jurosValor)}</span></label>`;
+        html += `<button type="button" class="vendedor-radio-parcela" style="font-size:16px;padding:12px;width:100%;text-align:left;color:var(--text-primary)" onclick="UI._vndConfirmarMulti('credito_${i}x',${clientePaga.toFixed(2)})"><span aria-hidden="true" style="width:16px;height:16px;border-radius:50%;border:2px solid var(--accent-cyan);display:inline-block;flex-shrink:0"></span><span class="vendedor-parcela-label" style="font-size:18px;font-weight:700">${i}x de ${UI.R(parcVal)}</span><span style="font-size:16px">Total: ${UI.R(clientePaga)} — Juros: ${UI.R(jurosValor)}</span></button>`;
     }
     html += '</div>';
     html += `<div class="vendedor-nav"><button class="btn btn-ghost btn-lg" style="font-size:18px" onclick="UI._vendedorPasso3Multi()">← Voltar</button></div>`;
@@ -909,7 +909,11 @@ UI._vndCartaoMulti = function (p) {
 };
 
 UI._vndConfirmarMulti = function (forma, valorCliente) {
+    if (UI._vendaEmProcessamento) return;
     const d = UI._vendedorDados; if (!d || !d._itensCarrinho) return;
+    UI._vendaEmProcessamento = true;
+    UI._vendedorDados = null;
+    setTimeout(() => { UI._vendaEmProcessamento = false; }, 1200);
     const taxas = dataManager.data.taxasCartao;
 
     if (!dataManager.isModoTreino()) {
@@ -1049,8 +1053,8 @@ UI._vndCartao = function () {
     const juros_mensal = 0.0199;
     let html = `<div class="vendedor-step-header"><span class="vendedor-step-badge">PASSO 3 DE 4</span><h2 style="font-size:28px">💳 CARTÃO — ${d.prod.nome}</h2><p style="font-size:20px">Valor: ${UI.R(p)}</p></div>`;
     html += '<div class="vendedor-parcelas-lista">';
-    html += `<label class="vendedor-radio-parcela" style="font-size:18px;padding:14px" onclick="UI._vndConfirmar('debito',${p})"><input type="radio" name="vnd-parc"><span class="vendedor-parcela-label" style="font-size:18px;font-weight:700">Débito</span><span style="font-size:18px">Cliente paga: ${UI.R(p)}</span></label>`;
-    html += `<label class="vendedor-radio-parcela" style="font-size:18px;padding:14px" onclick="UI._vndConfirmar('credito_1x',${p})"><input type="radio" name="vnd-parc"><span class="vendedor-parcela-label" style="font-size:18px;font-weight:700">Crédito 1x</span><span style="font-size:18px">Cliente paga: ${UI.R(p)}</span></label>`;
+    html += `<button type="button" class="vendedor-radio-parcela" style="font-size:18px;padding:14px;width:100%;text-align:left;color:var(--text-primary)" onclick="UI._vndConfirmar('debito',${p})"><span aria-hidden="true" style="width:16px;height:16px;border-radius:50%;border:2px solid var(--accent-cyan);display:inline-block;flex-shrink:0"></span><span class="vendedor-parcela-label" style="font-size:18px;font-weight:700">Débito</span><span style="font-size:18px">Cliente paga: ${UI.R(p)}</span></button>`;
+    html += `<button type="button" class="vendedor-radio-parcela" style="font-size:18px;padding:14px;width:100%;text-align:left;color:var(--text-primary)" onclick="UI._vndConfirmar('credito_1x',${p})"><span aria-hidden="true" style="width:16px;height:16px;border-radius:50%;border:2px solid var(--accent-cyan);display:inline-block;flex-shrink:0"></span><span class="vendedor-parcela-label" style="font-size:18px;font-weight:700">Crédito 1x</span><span style="font-size:18px">Cliente paga: ${UI.R(p)}</span></button>`;
     for (let i = 2; i <= 18; i++) {
         let clientePaga, jurosLabel;
         if (d._absorver && i <= 3) {
@@ -1062,7 +1066,7 @@ UI._vndCartao = function () {
             jurosLabel = `Juros: ${UI.R(jurosValor)}`;
         }
         const parcVal = clientePaga / i;
-        html += `<label class="vendedor-radio-parcela" style="font-size:16px;padding:12px" onclick="UI._vndConfirmar('credito_${i}x',${clientePaga.toFixed(2)})"><input type="radio" name="vnd-parc"><span class="vendedor-parcela-label" style="font-size:18px;font-weight:700">${i}x de ${UI.R(parcVal)}</span><span style="font-size:16px">Total: ${UI.R(clientePaga)} — ${jurosLabel}</span></label>`;
+        html += `<button type="button" class="vendedor-radio-parcela" style="font-size:16px;padding:12px;width:100%;text-align:left;color:var(--text-primary)" onclick="UI._vndConfirmar('credito_${i}x',${clientePaga.toFixed(2)})"><span aria-hidden="true" style="width:16px;height:16px;border-radius:50%;border:2px solid var(--accent-cyan);display:inline-block;flex-shrink:0"></span><span class="vendedor-parcela-label" style="font-size:18px;font-weight:700">${i}x de ${UI.R(parcVal)}</span><span style="font-size:16px">Total: ${UI.R(clientePaga)} — ${jurosLabel}</span></button>`;
     }
     html += '</div>';
     if (d._absorver) html += '<div class="vendedor-dica" style="font-size:18px">💡 Este produto pode ser vendido em até 3x sem juros!</div>';
@@ -1222,6 +1226,7 @@ UI._vndDividirPagamento = function (isMulti, precoFinal) {
 };
 
 UI._vndConfirmarDivisao = function (isMulti, precoFinal) {
+    if (UI._vendaEmProcessamento) return;
     const d = UI._vendedorDados; if (!d) return;
     const f1 = document.getElementById('split-forma1').value;
     const v1 = parseFloat(document.getElementById('split-val1').value) || 0;
@@ -1231,6 +1236,9 @@ UI._vndConfirmarDivisao = function (isMulti, precoFinal) {
     if (Math.abs(v1 + v2 - precoFinal) > 0.01) {
         return UI.toast('A soma dos valores deve ser igual ao total da venda!', 'error');
     }
+    UI._vendaEmProcessamento = true;
+    UI._vendedorDados = null;
+    setTimeout(() => { UI._vendaEmProcessamento = false; }, 1200);
 
     const pagamentos = [
         { forma: f1, valorBruto: v1 },
@@ -1296,7 +1304,11 @@ UI._vndConfirmarDivisao = function (isMulti, precoFinal) {
 };
 
 UI._vndFinalizar = function (forma, valorCliente) {
+    if (UI._vendaEmProcessamento) return;
     const d = UI._vendedorDados; if (!d) return;
+    UI._vendaEmProcessamento = true;
+    UI._vendedorDados = null;
+    setTimeout(() => { UI._vendaEmProcessamento = false; }, 1200);
     const caixaSelecionado = document.getElementById('vnd-caixa-destino')?.value || 'caixaPrincipal';
     const caixaEfetivo = caixaSelecionado === 'caixaFogos' ? 'caixaFogos' : (forma === 'dinheiro' ? 'caixaSecundario' : 'caixaPrincipal');
     const taxas = dataManager.data.taxasCartao;
